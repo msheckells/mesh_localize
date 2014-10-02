@@ -1,0 +1,18 @@
+<package>
+  <description brief="map_localize">
+
+     map_localize
+
+  </description>
+  <author>matt</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/map_localize</url>
+  <depend package="std_msgs"/>
+  <depend package="rospy"/>
+  <depend package="roscpp"/>
+  <depend package="opencv2"/>
+  <depend package="cv_bridge"/>
+</package>
+
+
