@@ -11,6 +11,14 @@ KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, int minHessi
   extractor.compute(img, keypoints, descriptors);
 }
 
+KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, std::vector<KeyPoint>& keypoints, Mat descriptors, int minHessian) :
+  img(image),
+  tf(tf),
+  keypoints(keypoints),
+  descriptors(descriptors)
+{
+}
+
 Mat KeyframeContainer::GetImage()
 {
   return img;

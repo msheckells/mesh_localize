@@ -1,6 +1,9 @@
 #include "map_localize/MapLocalizer.h"
 #include <tinyxml.h>
 #include <algorithm>
+#include <sstream>
+#include <stdlib.h>     
+#include <time.h> 
 
 MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     nh(nh),
@@ -9,16 +12,16 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
 
   // TODO: make filepath param
   std::string filename = "/home/matt/Documents/doc.xml";
-  std::cout << "Loading " << filename << "..." << std::flush;
-  if(!LoadPhotoscanFile(filename))
+  if(!LoadPhotoscanFile(filename, "data/KeypointsAndDescriptors.yml", true))
   {
-    std::cout << "failed" << std::endl;
     return;
   }
-  std::cout << "done" << std::endl;
 
-  /* Test Matches
-  KeyframeContainer* kf = keyframes[50];
+  /* Test Matches */
+  srand(time(NULL));
+  Mat test = imread("/home/matt/uav_image_data/run9/frame0332.jpg", CV_LOAD_IMAGE_GRAYSCALE );
+  KeyframeContainer* kf = new KeyframeContainer(test, Eigen::Matrix4f());
+  //KeyframeContainer* kf = keyframes[rand() % keyframes.size()];
   std::vector< KeyframeMatch > matches = FindImageMatches(kf, 5);
   
   namedWindow( "Query", WINDOW_AUTOSIZE );// Create a window for display.
@@ -30,7 +33,16 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     imshow( "Match", matches[i].kfc->GetImage() ); 
     waitKey(0);
   }  
-  */
+  /****/  
+}
+
+MapLocalizer::~MapLocalizer()
+{
+  for(int i = 0; i < keyframes.size(); i++)
+  {
+    delete keyframes[i];
+  }
+  keyframes.clear();
 }
 
 Eigen::Matrix4f MapLocalizer::StringToMatrix4f(std::string str)
@@ -61,12 +73,31 @@ Eigen::Matrix4f MapLocalizer::StringToMatrix4f(std::string str)
   return mat;
 }
 
-bool MapLocalizer::LoadPhotoscanFile(std::string filename)
+bool MapLocalizer::LoadPhotoscanFile(std::string filename, std::string desc_filename, bool load_descs)
 {
+  FileStorage fs;
   TiXmlDocument doc(filename);
+  std::cout << "Loading " << filename << "..." << std::flush;
   if(!doc.LoadFile())
+  {  
+    std::cout << "failed" << std::endl;
     return false;
+  }
+  std::cout << "done" << std::endl;
+  
+  if(load_descs)
+  {
+    std::cout << "Loading keypoints and descriptors..." << std::flush;
+    fs = FileStorage(desc_filename, FileStorage::READ);
+    if(!fs.isOpened())
+    {
+      std::cout << "Could not open descriptor file " << desc_filename << std::endl;
+      return false;
+    }
+    std::cout << "done" << std::endl;
+  }
 
+  std::cout << "Loading images..." << std::flush;
   TiXmlHandle docHandle(&doc);
   for(TiXmlElement* chunk = docHandle.FirstChild( "document" ).FirstChild( "chunk" ).ToElement();
     chunk != NULL; chunk = chunk->NextSiblingElement("chunk"))
@@ -83,7 +114,7 @@ bool MapLocalizer::LoadPhotoscanFile(std::string filename)
           continue;
         std::string tfStr = tfNode->ToElement()->GetText();
 
-        std::cout << filename << std::endl;
+        //std::cout << "Loading: " << filename << std::endl;
         //std::cout << tfStr << std::endl;
 
         Mat img = imread(filename, CV_LOAD_IMAGE_GRAYSCALE );
@@ -92,33 +123,73 @@ bool MapLocalizer::LoadPhotoscanFile(std::string filename)
           std::cout <<  "Could not open or find the image " << filename << std::endl ;
           return false;
         }
-        //namedWindow( "Query", WINDOW_AUTOSIZE );// Create a window for display.
-        //imshow( "Query", img );
-        //waitKey(0);
         
         Eigen::Matrix4f tf = StringToMatrix4f(tfStr);
         //std::cout << tf << std::endl;
 
-        KeyframeContainer* kfc = new KeyframeContainer(img, tf);
+        KeyframeContainer* kfc;
+        if(load_descs && desc_filename != "")
+        {
+          std::stringstream ss;
+          ss << keyframes.size();
+          
+          Mat descriptors;
+          std::vector<KeyPoint> keypoints;
+          
+          fs[std::string("descriptors") + ss.str()] >> descriptors;
+          FileNode kpn = fs[std::string("keypoints") + ss.str()];
+          read(kpn, keypoints); 
+          kfc = new KeyframeContainer(img, tf, keypoints, descriptors);
+        }
+        else
+        {  
+          kfc = new KeyframeContainer(img, tf);
+        }
         keyframes.push_back(kfc);    
       }
       //std::cout << "Found chunk " << chunk->Attribute("label") << std::endl;
     }
   }
+  std::cout << "done" << std::endl;
 
-  /* TODO: SAVE DESCRIPTORS AND KPs
-  FileStorage fs("Keypoints.yml", FileStorage::WRITE);
-  write(fs, "keypoints_1", keypoints_1);
-  write(fs, "descriptors_1", tempDescriptors_1);
-  ...
+  if(load_descs)
+  {
+    fs.release();
+  }
+  else if(desc_filename != "")
+  {
+    WriteDescriptorsToFile(desc_filename);
+  }
+  return true;
+}
+
+bool MapLocalizer::WriteDescriptorsToFile(std::string filename)
+{
+  FileStorage fs(filename, FileStorage::WRITE);
+  
+  std::cout << "Saving keypoints and descriptors..." << std::flush;
+  if(!fs.isOpened())
+  {
+    std::cout << "Could not open descriptor file " << filename << std::endl;
+    return false;
+  }
+
+  for(int i = 0; i < keyframes.size(); i++)
+  {
+    std::stringstream ss;
+    ss << i;
+    write(fs, std::string("keypoints") + ss.str(), keyframes[i]->GetKeypoints());
+    write(fs, std::string("descriptors") + ss.str(), keyframes[i]->GetDescriptors());
+  }
   fs.release();
-  */
+  std::cout << "done" << std::endl;
+
   return true;
 }
 
 std::vector< KeyframeMatch > MapLocalizer::FindImageMatches(KeyframeContainer* img, int k)
 {
-  const double numMatchThresh = 0.4;
+  const double numMatchThresh = 0;//0.16;
   const double matchRatio = 0.8;
   std::vector< KeyframeMatch > kfMatches;
   
@@ -145,13 +216,14 @@ std::vector< KeyframeMatch > MapLocalizer::FindImageMatches(KeyframeContainer* i
         matchPts2.push_back(keyframes[i]->GetKeypoints()[matches[j][0].trainIdx].pt);
       }
     }
-    //if(goodMatches.size() >= numMatchThresh*matches.size())
+    if(goodMatches.size() >= numMatchThresh*matches.size())
     {
-      //std:: cout << "Found Match!" << std::endl;
+      std:: cout << "Found Match!" << std::endl;
       kfMatches.push_back(KeyframeMatch(keyframes[i], goodMatches, matchPts1, matchPts2));
     }
   }
 
+  k = (kfMatches.size() < k) ? kfMatches.size() : k;
   std::sort(kfMatches.begin(), kfMatches.end());
 
   return std::vector< KeyframeMatch > (kfMatches.begin(), kfMatches.begin()+k);

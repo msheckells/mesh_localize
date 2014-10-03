@@ -13,11 +13,9 @@ public:
   std::vector< Point2f > matchPts1;
   std::vector< Point2f > matchPts2;
   
-  // Try sorting by quality of matches?
-  bool operator< (const KeyframeMatch& kfm) const
-  {
-    return (matches.size() > kfm.matches.size());
-  }
+  bool operator< (const KeyframeMatch& kfm) const;
+private:
+  mutable int tot_dist;  
 };
 
 #endif
