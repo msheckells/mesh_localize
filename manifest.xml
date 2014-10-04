@@ -13,6 +13,9 @@
   <depend package="roscpp"/>
   <depend package="opencv2"/>
   <depend package="cv_bridge"/>
+	<depend package="gazebo_msgs"/>
+	<depend package="sensor_msgs"/>
+	<depend package="image_transport"/>
 </package>
 
 

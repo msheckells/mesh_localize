@@ -1,1 +1,4 @@
 data
+bin/
+build/
+lib/

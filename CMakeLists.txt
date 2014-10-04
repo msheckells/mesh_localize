@@ -33,9 +33,18 @@ rosbuild_add_library(map_localize src/KeyframeContainer.cpp
                                   src/KeyframeMatch.cpp)
 target_link_libraries(map_localize ${OpenCV_LIBS} ${TinyXML_LIBRARY})
 
+rosbuild_add_library(gazebo_localize src/KeyframeContainer.cpp
+                                  src/GazeboLocalizer.cpp
+                                  src/KeyframeMatch.cpp)
+target_link_libraries(gazebo_localize ${OpenCV_LIBS})
+
+
+
 rosbuild_add_executable(map_localize_node src/map_localize_node.cpp)
 target_link_libraries(map_localize_node map_localize)
 
+rosbuild_add_executable(gazebo_localize_node src/gazebo_localize_node.cpp)
+target_link_libraries(gazebo_localize_node gazebo_localize)
 
 #common commands for building c++ executables and libraries
 #rosbuild_add_library(${PROJECT_NAME} src/example.cpp)
