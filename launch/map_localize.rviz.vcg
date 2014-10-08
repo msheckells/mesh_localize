@@ -1,0 +1,69 @@
+Actual\ Position.Enabled=1
+Actual\ Position.Marker\ Topic=/map_localize/actual_position
+Actual\ Position.Queue\ Size=0
+Background\ ColorB=0
+Background\ ColorG=0
+Background\ ColorR=0
+Camera\ Config=0.0847978 4.72904 20.4525 7.52559 11.5901 4.98159
+Camera\ Type=rviz::OrbitViewController
+Estimated\ Position.Enabled=1
+Estimated\ Position.Marker\ Topic=/map_localize/estimated_position
+Estimated\ Position.Queue\ Size=0
+Fixed\ Frame=/world
+Grid.Alpha=0.5
+Grid.Cell\ Size=1
+Grid.ColorB=0.5
+Grid.ColorG=0.5
+Grid.ColorR=0.5
+Grid.Enabled=1
+Grid.Line\ Style=0
+Grid.Line\ Width=0.03
+Grid.Normal\ Cell\ Count=0
+Grid.OffsetX=0
+Grid.OffsetY=0
+Grid.OffsetZ=0
+Grid.Plane=0
+Grid.Plane\ Cell\ Count=100
+Grid.Reference\ Frame=/world
+Map.Enabled=1
+Map.Marker\ Topic=/map_localize/map
+Map.Queue\ Size=0
+Match\ Positions.Enabled=1
+Match\ Positions.Marker\ Topic=/map_localize/match_points
+Match\ Positions.Queue\ Size=0
+Match\ T\ Vectors.Enabled=1
+Match\ T\ Vectors.Marker\ Array\ Topic=/map_localize/t_vectors
+Match\ T\ Vectors.Queue\ Size=0
+Property\ Grid\ Splitter=799,78
+Property\ Grid\ State=expanded=.Global Options,.Global Status,Map.Enabled,Map.Status,Match Positions.Enabled,Match Positions.Status,Match T Vectors.Enabled,Estimated Position.Enabled,Actual Position.Enabled;splitterratio=0.71161
+QMainWindow=000000ff00000000fd000000030000000000000129000003bffc0200000002fb000000100044006900730070006c006100790073010000001d000003bf000000ee00fffffffb0000001600410063007400750061006c00200050006100740068000000038f000000b90000004c00ffffff0000000100000131000003e3fc0200000003fb0000001e0054006f006f006c002000500072006f0070006500720074006900650073000000001d000000ff0000006700fffffffb0000000a00560069006500770073000000001d00000283000000bb00fffffffb0000001200530065006c0065006300740069006f006e000000001d000003e30000006700ffffff00000003000003ad0000003efc0100000001fb0000000800540069006d00650100000000000003ad000002bf00ffffff0000027e000003bf00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+Target\ Frame=<Fixed Frame>
+Tool\ 2D\ Nav\ GoalTopic=/move_base_simple/goal
+Tool\ 2D\ Pose\ EstimateTopic=initialpose
+[Display0]
+ClassName=rviz::MarkerDisplay
+Name=Map
+[Display1]
+ClassName=rviz::MarkerDisplay
+Name=Match Positions
+[Display2]
+ClassName=rviz::MarkerArrayDisplay
+Name=Match T Vectors
+[Display3]
+ClassName=rviz::MarkerDisplay
+Name=Estimated Position
+[Display4]
+ClassName=rviz::MarkerDisplay
+Name=Actual Position
+[Display5]
+ClassName=rviz::GridDisplay
+Name=Grid
+[Panel0]
+ClassLookupName=rviz_plugin_tutorials/Teleop
+Name=Actual Path
+Topic=
+[Window]
+Height=1092
+Width=957
+X=979
+Y=-4

@@ -30,6 +30,9 @@ include_directories(${Eigen_INCLUDE_DIRS})
 
 rosbuild_add_library(map_localize src/KeyframeContainer.cpp
                                   src/MapLocalizer.cpp
+                                  src/Common.cpp
+                                  src/FindCameraMatrices.cpp
+                                  src/Triangulation.cpp
                                   src/KeyframeMatch.cpp)
 target_link_libraries(map_localize ${OpenCV_LIBS} ${TinyXML_LIBRARY})
 

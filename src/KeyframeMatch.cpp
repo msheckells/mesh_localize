@@ -1,10 +1,13 @@
 #include "map_localize/KeyframeMatch.h"
 
-KeyframeMatch::KeyframeMatch(KeyframeContainer* kfc, std::vector< DMatch >& matches, std::vector < Point2f >& matchPts1, std::vector< Point2f >& matchPts2) :
+KeyframeMatch::KeyframeMatch(KeyframeContainer* kfc, std::vector< DMatch >& matches, std::vector< DMatch >& allMatches, std::vector < Point2f >& matchPts1, std::vector< Point2f >& matchPts2, std::vector< KeyPoint > matchKps1, std::vector< KeyPoint > matchKps2) :
   kfc(kfc),
   matches(matches),
+  allMatches(allMatches),
   matchPts1(matchPts1),
   matchPts2(matchPts2),
+  matchKps1(matchKps1),
+  matchKps2(matchKps2),
   tot_dist(-1)
 {
 }

@@ -12,6 +12,7 @@
   <depend package="rospy"/>
   <depend package="roscpp"/>
   <depend package="opencv2"/>
+  <depend package="tf"/>
   <depend package="cv_bridge"/>
 </package>
 
