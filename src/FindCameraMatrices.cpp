@@ -148,7 +148,7 @@ Mat GetFundamentalMat(const vector<KeyPoint>& imgpts1,
 #endif
 		double minVal,maxVal;
 		cv::minMaxIdx(pts1,&minVal,&maxVal);
-		F = findFundamentalMat(pts1, pts2, FM_RANSAC, 1.0/*0.006 * maxVal*/, 0.99, status); //threshold from [Snavely07 4.1]
+		F = findFundamentalMat(pts1, pts2, FM_RANSAC, 0.006 * maxVal, 0.99, status); //threshold from [Snavely07 4.1]
 	}
 	
 	vector<DMatch> new_matches;
@@ -261,35 +261,37 @@ bool TestTriangulation(const vector<CloudPoint>& pcloud, const Matx34d& P, vecto
 	if(percentage < 0.75)
 		return false; //less than 75% of the points are in front of the camera
 
-	//check for coplanarity of points
-	if(true) //not
-	{
-		cv::Mat_<double> cldm(pcloud.size(),3);
-		for(unsigned int i=0;i<pcloud.size();i++) {
-			cldm.row(i)(0) = pcloud[i].pt.x;
-			cldm.row(i)(1) = pcloud[i].pt.y;
-			cldm.row(i)(2) = pcloud[i].pt.z;
-		}
-		cv::Mat_<double> mean;
-		cv::PCA pca(cldm,mean,CV_PCA_DATA_AS_ROW);
+	return true;
+}
 
-		int num_inliers = 0;
-		cv::Vec3d nrm = pca.eigenvectors.row(2); nrm = nrm / norm(nrm);
-		cv::Vec3d x0 = pca.mean;
-		double p_to_plane_thresh = sqrt(pca.eigenvalues.at<double>(2));
-
-		for (int i=0; i<pcloud.size(); i++) {
-			Vec3d w = Vec3d(pcloud[i].pt) - x0;
-			double D = fabs(nrm.dot(w));
-			if(D < p_to_plane_thresh) num_inliers++;
-		}
-
-		cout << num_inliers << "/" << pcloud.size() << " are coplanar" << endl;
-		if((double)num_inliers / (double)(pcloud.size()) > 0.85)
-			return false;
+bool TestCoplanarity(const vector<CloudPoint>& pcloud, vector<int>& nonplaneIdx)
+{
+	nonplaneIdx.clear();
+ 	cv::Mat_<double> cldm(pcloud.size(),3);
+	for(unsigned int i=0;i<pcloud.size();i++) {
+		cldm.row(i)(0) = pcloud[i].pt.x;
+		cldm.row(i)(1) = pcloud[i].pt.y;
+		cldm.row(i)(2) = pcloud[i].pt.z;
 	}
 
-	return true;
+	cv::Mat_<double> mean;
+	cv::PCA pca(cldm,mean,CV_PCA_DATA_AS_ROW);
+	int num_inliers = 0;
+
+	cv::Vec3d nrm = pca.eigenvectors.row(2); nrm = nrm / norm(nrm);
+	cv::Vec3d x0 = pca.mean;
+	double p_to_plane_thresh = sqrt(pca.eigenvalues.at<double>(2));
+
+	for (int i=0; i<pcloud.size(); i++) {
+		Vec3d w = Vec3d(pcloud[i].pt) - x0;
+		double D = fabs(nrm.dot(w));
+
+		if(D < p_to_plane_thresh) num_inliers++;
+                else nonplaneIdx.push_back(i);
+	}
+
+	cout << num_inliers << "/" << pcloud.size() << " are coplanar" << endl;
+	return (double)num_inliers / (double)(pcloud.size()) > 0.85;
 }
 
 bool DecomposeEtoRandT(
@@ -307,7 +309,7 @@ bool DecomposeEtoRandT(
 	//check if first and second singular values are the same (as they should be)
 	double singular_values_ratio = fabsf(svd_w.at<double>(0) / svd_w.at<double>(1));
 	if(singular_values_ratio>1.0) singular_values_ratio = 1.0/singular_values_ratio; // flip ratio to keep it [0,1]
-	if (singular_values_ratio < 0.7) {
+	if (singular_values_ratio < 0.6/*0.7*/) {
 		cout << "singular values are too far apart\n";
 		return false;
 	}
@@ -356,7 +358,7 @@ bool FindCameraMatrices(const Mat& K,
 								  ,img_1,img_2
 #endif
 								  );
-		if(matches.size() < 75/*100*/) { // || ((double)imgpts1_good.size() / (double)imgpts1.size()) < 0.25
+		if(matches.size() < 100) { // || ((double)imgpts1_good.size() / (double)imgpts1.size()) < 0.25
 			cerr << "not enough inliers after F matrix" << endl;
 			return false;
 		}

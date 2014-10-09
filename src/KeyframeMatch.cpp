@@ -32,7 +32,7 @@ bool KeyframeMatch::operator< (const KeyframeMatch& kfm) const
     }
   }
   return tot_dist/double(matches.size()) < kfm.tot_dist/double(kfm.matches.size());
-  /***/
+  **/
   return (matches.size() > kfm.matches.size());
 }
 

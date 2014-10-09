@@ -15,8 +15,8 @@ using namespace cv;
 class KeyframeContainer
 {
 public:
-  KeyframeContainer(Mat image, Eigen::Matrix4f tf, int minHessian = 400);
-  KeyframeContainer(Mat image, Eigen::Matrix4f tf, std::vector<KeyPoint>& keypoints, Mat descriptors, int minHessian = 400);
+  KeyframeContainer(Mat image, Eigen::Matrix4f tf = Eigen::Matrix4f(), int minHessian = 200);
+  KeyframeContainer(Mat image, Eigen::Matrix4f tf, std::vector<KeyPoint>& keypoints, Mat descriptors, int minHessian = 200);
   
   Mat GetImage();
   Mat GetDescriptors();
@@ -24,10 +24,10 @@ public:
   Eigen::Matrix4f GetTf();
 private:
 
+  Eigen::Matrix4f tf;  
   Mat img;
   std::vector<KeyPoint> keypoints;
   Mat descriptors;
-  Eigen::Matrix4f tf;  
 };
 
 #endif

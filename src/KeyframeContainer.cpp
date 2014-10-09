@@ -1,19 +1,21 @@
 #include "map_localize/KeyframeContainer.h"
 
 KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, int minHessian) :
-  img(image),
-  tf(tf)
+  tf(tf),
+  img(image)
 {
-  SurfFeatureDetector detector(minHessian);
+  //SurfFeatureDetector detector(minHessian);
+  SiftFeatureDetector detector;
   detector.detect(img, keypoints);
   
-  SurfDescriptorExtractor extractor;
+  //SurfDescriptorExtractor extractor;
+  SiftDescriptorExtractor extractor;
   extractor.compute(img, keypoints, descriptors);
 }
 
 KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, std::vector<KeyPoint>& keypoints, Mat descriptors, int minHessian) :
-  img(image),
   tf(tf),
+  img(image),
   keypoints(keypoints),
   descriptors(descriptors)
 {
