@@ -103,6 +103,69 @@ bool CheckCoherentRotation(cv::Mat_<double>& R) {
 	return true;
 }
 
+Mat GetHomographyMat(const vector<KeyPoint>& imgpts1,
+                                           const vector<KeyPoint>& imgpts2,
+                                           vector<KeyPoint>& imgpts1_good,
+                                           vector<KeyPoint>& imgpts2_good,
+                                           vector<DMatch>& matches)
+{
+	//(although this is not the proper way to do this)
+	vector<uchar> status(imgpts1.size());
+	
+	std::vector< DMatch > good_matches_;
+	std::vector<KeyPoint> keypoints_1, keypoints_2;
+	
+	imgpts1_good.clear(); imgpts2_good.clear();
+	
+	vector<KeyPoint> imgpts1_tmp;
+	vector<KeyPoint> imgpts2_tmp;
+	if (matches.size() <= 0) { 
+		//points already aligned...
+		imgpts1_tmp = imgpts1;
+		imgpts2_tmp = imgpts2;
+	} else {
+		GetAlignedPointsFromMatch(imgpts1, imgpts2, matches, imgpts1_tmp, imgpts2_tmp);
+	}
+	
+	Mat H;
+	{
+		vector<Point2f> pts1,pts2;
+		KeyPointsToPoints(imgpts1_tmp, pts1);
+		KeyPointsToPoints(imgpts2_tmp, pts2);
+		
+		double minVal,maxVal;
+		cv::minMaxIdx(pts1,&minVal,&maxVal);
+		H = findHomography(pts1, pts2, CV_RANSAC, 0.006 * maxVal, status); //threshold from [Snavely07 4.1]
+	}
+	
+	vector<DMatch> new_matches;
+	cout << "H keeping " << countNonZero(status) << " / " << status.size() << endl;	
+	for (unsigned int i=0; i<status.size(); i++) {
+		if (status[i]) 
+		{
+			imgpts1_good.push_back(imgpts1_tmp[i]);
+			imgpts2_good.push_back(imgpts2_tmp[i]);
+
+			if (matches.size() <= 0) { //points already aligned...
+				new_matches.push_back(DMatch(matches[i].queryIdx,matches[i].trainIdx,matches[i].distance));
+			} else {
+				new_matches.push_back(matches[i]);
+			}
+
+#ifdef __SFM__DEBUG__
+			good_matches_.push_back(DMatch(imgpts1_good.size()-1,imgpts1_good.size()-1,1.0));
+			keypoints_1.push_back(imgpts1_tmp[i]);
+			keypoints_2.push_back(imgpts2_tmp[i]);
+#endif
+		}
+	}	
+	
+	cout << matches.size() << " matches before, " << new_matches.size() << " new matches after Homography Matrix\n";
+	matches = new_matches; //keep only those points who survived the homography matrix
+	
+	return H;
+}
+
 Mat GetFundamentalMat(const vector<KeyPoint>& imgpts1,
 					   const vector<KeyPoint>& imgpts2,
 					   vector<KeyPoint>& imgpts1_good,
@@ -294,6 +357,94 @@ bool TestCoplanarity(const vector<CloudPoint>& pcloud, vector<int>& nonplaneIdx)
 	return (double)num_inliers / (double)(pcloud.size()) > 0.85;
 }
 
+bool DecomposeHtoRandT(
+	Mat_<double>& H,
+	vector<KeyPoint>& imgpts1_good,
+	vector<KeyPoint>& imgpts2_good,
+	Mat_<double>& R1,
+	Mat_<double>& R2,
+	Mat_<double>& t1,
+	Mat_<double>& t2) 
+{
+	Mat svd_u, svd_vt, svd_w;
+	Mat eig_E, eig_V;
+	TakeSVDOfE(H,svd_u,svd_vt,svd_w);
+
+	H = H/svd_w.at<double>(1); // normalize H with second singular val
+        std::cout << "normalized H: " << std::endl << Mat(H) << std::endl;	
+
+	Mat_<double> HtH = H.t()*H;
+	
+	int numPositive = 0;
+	for(unsigned int i = 0; i < imgpts1_good.size(); i++)
+	{
+		Matx31d pt1(imgpts1_good[i].pt.x, imgpts1_good[i].pt.y, 1);
+		Matx31d pt2(imgpts2_good[i].pt.x, imgpts2_good[i].pt.y, 1);
+		//Make sure x_2^T*H*x_1 > 0 for most x
+		if(Mat(Mat(pt2.t())*H*Mat(pt1)).at<double>(0) > 0)
+			numPositive++;
+	}
+	if(numPositive < 0.5*imgpts1_good.size())
+		H = -H;
+	
+        eigen(HtH,eig_E,eig_V);
+	std::cout << "Sig: " << std::endl << Mat(eig_E) << std::endl;
+	std::cout << "V: " << std::endl << Mat(eig_V) << std::endl;
+	double sig1 = eig_E.at<double>(0,0);
+	double sig2 = eig_E.at<double>(0,1);
+	double sig3 = eig_E.at<double>(0,2);
+	if(abs(sig1 - sig3) < 1e-6)
+		return false;
+
+	Mat u1 = (sqrt(1 - sig3*sig3)*eig_V.col(0) + sqrt(sig1*sig1 -1)*eig_V.col(2))/sqrt(sig1*sig1-sig3*sig3); 
+	Mat u2 = (sqrt(1 - sig3*sig3)*eig_V.col(0) - sqrt(sig1*sig1 -1)*eig_V.col(2))/sqrt(sig1*sig1-sig3*sig3); 
+	
+	std::cout << "u1: " << std::endl << Mat(u1) << std::endl;
+	std::cout << "u2: " << std::endl << Mat(u2) << std::endl;
+	Mat U1 = Mat::zeros(3,3,CV_32FC1);
+	Mat U2 = Mat::zeros(3,3,CV_32FC1);
+	Mat W1 = Mat::zeros(3,3,CV_32FC1);
+	Mat W2 = Mat::zeros(3,3,CV_32FC1);
+
+	eig_V.col(1).copyTo(U1.col(0));
+	u1.copyTo(U1.col(1));
+	Mat(U1.col(0)).cross(U1.col(1)).copyTo(U1.col(2));
+	
+	eig_V.col(1).copyTo(U2.col(0));
+	u2.copyTo(U2.col(1));
+	Mat(U1.col(0)).cross(U1.col(1)).copyTo(U2.col(2));
+	
+	Mat(H*eig_V.col(1)).copyTo(W1.col(0));
+	Mat(H*u1).copyTo(W1.col(1));
+	Mat(H*eig_V.col(1)).cross(H*u1).copyTo(W1.col(2));
+
+	Mat(H*eig_V.col(1)).copyTo(W2.col(0));
+	Mat(H*u2).copyTo(W2.col(1));
+	Mat(H*eig_V.col(1)).cross(H*u2).copyTo(W2.col(2));
+	
+	std::cout << "U1: " << std::endl << Mat(U1) << std::endl;
+	std::cout << "U2: " << std::endl << Mat(U2) << std::endl;
+	std::cout << "W1: " << std::endl << Mat(W1) << std::endl;
+	std::cout << "W2: " << std::endl << Mat(W2) << std::endl;
+	
+	R1 = Mat(W1*U1.t());
+	Mat N1 = Mat(eig_V.col(1)).cross(u1); //v2 x u1
+	t1 = (H-R1)*N1;
+	if(N1.at<double>(2,0) < 0) 
+	{
+		t1 = -t1;
+	}
+	
+	R2 = Mat(W2*U2.t());
+	Mat N2 = eig_V.col(1).cross(u2); //v2 x u2
+	t2 = (H-R2)*N2;
+	if(N2.at<double>(2,0) < 0) 
+	{
+		t2 = -t2;
+	}
+	return true;
+}
+
 bool DecomposeEtoRandT(
 	Mat_<double>& E,
 	Mat_<double>& R1,
@@ -331,6 +482,50 @@ bool DecomposeEtoRandT(
 	return true;
 }
 
+bool FindCameraMatricesWithH(const Mat& K, 
+						const Mat& Kinv, 
+						const Mat& distcoeff,
+						const vector<KeyPoint>& imgpts1,
+						const vector<KeyPoint>& imgpts2,
+						vector<KeyPoint>& imgpts1_good,
+						vector<KeyPoint>& imgpts2_good,
+						Matx34d& P,
+						Matx34d& P1,
+						Matx34d& P2,
+						vector<DMatch>& matches
+						) 
+{
+	//Find camera matrices
+	{
+		cout << "Find camera H matrices...";
+		double t = getTickCount();
+		
+		Mat H = GetHomographyMat(imgpts1,imgpts2,imgpts1_good,imgpts2_good,matches);
+		if(matches.size() < 30/*100*/) { // || ((double)imgpts1_good.size() / (double)    imgpts1.size()) < 0.25
+                      cerr << "not enough inliers after H matrix" << endl;
+                      return false;
+                }
+
+		Mat_<double> G = Kinv * H * K;
+		Mat_<double> R1(3,3);
+                Mat_<double> R2(3,3);
+                Mat_<double> t1(1,3);
+                Mat_<double> t2(1,3);
+
+		if(!DecomposeHtoRandT(G, imgpts1_good, imgpts2_good, R1, R2, t1, t2))
+			return false;
+
+		P1 = Matx34d(R1(0,0),   R1(0,1),        R1(0,2),        t1(0),
+                             R1(1,0),   R1(1,1),        R1(1,2),        t1(1),
+                             R1(2,0),   R1(2,1),        R1(2,2),        t1(2));
+		P2 = Matx34d(R2(0,0),   R2(0,1),        R2(0,2),        t2(0),
+                             R2(1,0),   R2(1,1),        R2(1,2),        t2(1),
+                             R2(2,0),   R2(2,1),        R2(2,2),        t2(2));
+		std::cout << "Ps:" << std::endl << Mat(P1) << std::endl << Mat(P2) << std::endl;
+		return true;
+	}
+}
+
 bool FindCameraMatrices(const Mat& K, 
 						const Mat& Kinv, 
 						const Mat& distcoeff,
@@ -358,10 +553,11 @@ bool FindCameraMatrices(const Mat& K,
 								  ,img_1,img_2
 #endif
 								  );
-		if(matches.size() < 100) { // || ((double)imgpts1_good.size() / (double)imgpts1.size()) < 0.25
-			cerr << "not enough inliers after F matrix" << endl;
-			return false;
-		}
+		
+		//if(matches.size() < 20 /*100*/) { // || ((double)imgpts1_good.size() / (double)imgpts1.size()) < 0.25
+		//	cerr << "not enough inliers after F matrix" << endl;
+		//	return false;
+		//}
 		
 		//Essential matrix: compute then extract cameras [R|t]
 		Mat_<double> E = K.t() * F * K; //according to HZ (9.12)
