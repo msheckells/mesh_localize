@@ -26,7 +26,8 @@ cv::Mat GetHomographyMat(	const std::vector<cv::KeyPoint>& imgpts1,
 							const std::vector<cv::KeyPoint>& imgpts2,
 							std::vector<cv::KeyPoint>& imgpts1_good,
 							std::vector<cv::KeyPoint>& imgpts2_good,
-							std::vector<cv::DMatch>& matches);
+							std::vector<cv::DMatch>& matches,
+							std::vector<cv::DMatch>& nonmatches);
 
 cv::Mat GetFundamentalMat(	const std::vector<cv::KeyPoint>& imgpts1,
 							const std::vector<cv::KeyPoint>& imgpts2,
@@ -46,7 +47,6 @@ bool FindCameraMatricesWithH(const cv::Mat& K,
 						std::vector<cv::KeyPoint>& imgpts2_good,
 						cv::Matx34d& P,
 						cv::Matx34d& P1,
-						cv::Matx34d& P2,
 						std::vector<cv::DMatch>& matches);
 
 bool FindCameraMatrices(const cv::Mat& K, 

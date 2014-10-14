@@ -99,7 +99,6 @@ bool CheckCoherentRotation(cv::Mat_<double>& R) {
 		cerr << "det(R) != +-1.0, this is not a rotation matrix" << endl;
 		return false;
 	}
-
 	return true;
 }
 
@@ -107,10 +106,11 @@ Mat GetHomographyMat(const vector<KeyPoint>& imgpts1,
                                            const vector<KeyPoint>& imgpts2,
                                            vector<KeyPoint>& imgpts1_good,
                                            vector<KeyPoint>& imgpts2_good,
-                                           vector<DMatch>& matches)
+                                           vector<DMatch>& matches,
+					   vector<DMatch>& nonmatches)
 {
-	//(although this is not the proper way to do this)
 	vector<uchar> status(imgpts1.size());
+	nonmatches.clear();
 	
 	std::vector< DMatch > good_matches_;
 	std::vector<KeyPoint> keypoints_1, keypoints_2;
@@ -151,12 +151,10 @@ Mat GetHomographyMat(const vector<KeyPoint>& imgpts1,
 			} else {
 				new_matches.push_back(matches[i]);
 			}
-
-#ifdef __SFM__DEBUG__
-			good_matches_.push_back(DMatch(imgpts1_good.size()-1,imgpts1_good.size()-1,1.0));
-			keypoints_1.push_back(imgpts1_tmp[i]);
-			keypoints_2.push_back(imgpts2_tmp[i]);
-#endif
+		}
+		else
+		{
+			nonmatches.push_back(matches[i]);
 		}
 	}	
 	
@@ -491,37 +489,102 @@ bool FindCameraMatricesWithH(const Mat& K,
 						vector<KeyPoint>& imgpts2_good,
 						Matx34d& P,
 						Matx34d& P1,
-						Matx34d& P2,
 						vector<DMatch>& matches
 						) 
 {
 	//Find camera matrices
 	{
 		cout << "Find camera H matrices...";
-		double t = getTickCount();
-		
-		Mat H = GetHomographyMat(imgpts1,imgpts2,imgpts1_good,imgpts2_good,matches);
+	
+		vector<DMatch> nonmatches, nonmatches2;	
+		vector<DMatch> matches2;
+		vector<KeyPoint> imgpts1_good2;
+		vector<KeyPoint> imgpts2_good2;
+
+		Mat H = GetHomographyMat(imgpts1,imgpts2,imgpts1_good,imgpts2_good,matches,nonmatches);
 		if(matches.size() < 30/*100*/) { // || ((double)imgpts1_good.size() / (double)    imgpts1.size()) < 0.25
-                      cerr << "not enough inliers after H matrix" << endl;
-                      return false;
+                	cerr << "not enough inliers after H matrix" << endl;
+                	return false;
                 }
+		if(nonmatches.size() < 20){
+			cerr << "not enough points left for second plane" << endl;
+			return false;
+		}
+		matches2 = nonmatches;
+		Mat H2 = GetHomographyMat(imgpts1,imgpts2,imgpts1_good2,imgpts2_good2,matches2,nonmatches2);
+		if(matches2.size() < 20)
+		{
+			cerr << "could not find second plane: not enough inliers" << endl;
+			return false;
+		}	
 
 		Mat_<double> G = Kinv * H * K;
-		Mat_<double> R1(3,3);
-                Mat_<double> R2(3,3);
-                Mat_<double> t1(1,3);
-                Mat_<double> t2(1,3);
+		Mat_<double> G2 = Kinv * H2 * K;
+		Mat_<double> R1(3,3), R1_2(3,3);
+                Mat_<double> R2(3,3), R2_2(3,3);
+                Mat_<double> t1(1,3), t1_2(1,3);
+                Mat_<double> t2(1,3), t2_2(1,3);
 
 		if(!DecomposeHtoRandT(G, imgpts1_good, imgpts2_good, R1, R2, t1, t2))
+			return false;
+		if(!DecomposeHtoRandT(G2, imgpts1_good2, imgpts2_good2, R1_2, R2_2, t1_2, t2_2))
 			return false;
 
 		P1 = Matx34d(R1(0,0),   R1(0,1),        R1(0,2),        t1(0),
                              R1(1,0),   R1(1,1),        R1(1,2),        t1(1),
                              R1(2,0),   R1(2,1),        R1(2,2),        t1(2));
-		P2 = Matx34d(R2(0,0),   R2(0,1),        R2(0,2),        t2(0),
+		Matx34d P2 = Matx34d(R2(0,0),   R2(0,1),        R2(0,2),        t2(0),
                              R2(1,0),   R2(1,1),        R2(1,2),        t2(1),
                              R2(2,0),   R2(2,1),        R2(2,2),        t2(2));
+		Matx34d P1_2 = Matx34d(R1_2(0,0),   R1_2(0,1),        R1_2(0,2),        t1_2(0),
+                              R1_2(1,0),   R1_2(1,1),        R1_2(1,2),        t1_2(1),
+                              R1_2(2,0),   R1_2(2,1),        R1_2(2,2),        t1_2(2));
+		Matx34d P2_2 = Matx34d(R2_2(0,0),   R2_2(0,1),        R2_2(0,2),        t2_2(0),
+                              R2_2(1,0),   R2_2(1,1),        R2_2(1,2),        t2_2(1),
+                              R2_2(2,0),   R2_2(2,1),        R2_2(2,2),        t2_2(2));
 		std::cout << "Ps:" << std::endl << Mat(P1) << std::endl << Mat(P2) << std::endl;
+		std::cout << "Ps2:" << std::endl << Mat(P1_2) << std::endl << Mat(P2_2) << std::endl;
+		vector<Mat_<double> > R1s, R2s, t1s, t2s;
+		t1s.push_back(t1);
+		t1s.push_back(t2);
+		R1s.push_back(R1);
+		R1s.push_back(R2);
+		t2s.push_back(t1_2);
+		t2s.push_back(t2_2);
+		R2s.push_back(R1_2);
+		R2s.push_back(R2_2);
+		double minTheta = 99999999;
+                Mat_<double> minR1(3,3), minR2(3,3), mint1(1,3), mint2(1,3);
+
+		for(unsigned int i = 0; i < t1s.size(); i++)
+		{
+			for(unsigned int i = 0; i < t1s.size(); i++)
+			{
+				double theta = acos(t1s[i].dot(t2s[i])/(norm(t1s[i])*norm(t2s[i])));
+				if(theta < minTheta)
+				{
+					minTheta = theta;
+					mint1 = t1s[i];
+					mint2 = t2s[i];
+					minR1 = R1s[i];	
+					minR2 = R2s[i];	
+				}
+			}
+		}
+
+		std::cout << "Min angle: " << minTheta*180.0/M_PI << std::endl;
+		if(minTheta*180./M_PI > 40)
+		{
+			cerr << "Two homogrpahy solution is not compatible" << std::endl;
+			return false;
+		}
+		Mat_<double> t_est = (mint1 + mint2)/2;
+		//t_est.copyTo(P1.col(3));
+		P1 = Matx34d(minR1(0,0),   minR1(0,1),        minR1(0,2),        t_est(0),
+                             minR1(1,0),   minR1(1,1),        minR1(1,2),        t_est(1),
+                             minR1(2,0),   minR1(2,1),        minR1(2,2),        t_est(2));
+
+		std::cout << "P_est:" << std::endl << Mat(P1) << std::endl;
 		return true;
 	}
 }
