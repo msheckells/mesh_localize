@@ -10,6 +10,9 @@
 #include "KeyframeContainer.h"
 #include "KeyframeMatch.h"
 
+#include "pcl_ros/point_cloud.h"
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
 
 class MapLocalizer
 {
@@ -29,18 +32,21 @@ public:
   MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private);
   ~MapLocalizer();
 
+private:
   std::vector< KeyframeMatch > FindImageMatches(KeyframeContainer* img, int k, bool usePos = false);
   Eigen::Matrix4f FindImageTf(KeyframeContainer* img, std::vector< KeyframeMatch >, std::vector< KeyframeMatch >& goodMatches, std::vector< Eigen::Vector3f >& goodTVecs);
   void PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImgTf, std::vector< KeyframeMatch > matches, std::vector< Eigen::Vector3f > tvecs);
   void PublishMap();
+  void PublishPointCloud(const std::vector<pcl::PointXYZ>&);
+  void PlotTf(Eigen::Matrix4f tf, std::string name);
 
   void spin(const ros::TimerEvent& e);
   void HandleImage(sensor_msgs::ImageConstPtr msg);
-
-private:
+  
   bool WriteDescriptorsToFile(std::string filename);
   bool LoadPhotoscanFile(std::string filename, std::string desc_filename = "", bool load_descs = false);
   Eigen::Matrix4f StringToMatrix4f(std::string);
+  std::vector<pcl::PointXYZ> GetPointCloudFromFrames(KeyframeContainer*, KeyframeContainer*);
 
   std::vector<KeyframeContainer*> keyframes;
   KeyframeContainer* currentKeyframe;
@@ -59,11 +65,15 @@ private:
   ros::Publisher epos_marker_pub;
   ros::Publisher apos_marker_pub;
   ros::Publisher path_marker_pub;
+  ros::Publisher pointcloud_pub;
   tf::TransformBroadcaster br;
 
   ros::Subscriber image_subscriber;
 
   ros::Timer timer;
+
+  Eigen::Matrix3f K;
+  Eigen::VectorXf distcoeff;
 };
 
 #endif

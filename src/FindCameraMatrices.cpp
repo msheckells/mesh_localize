@@ -325,7 +325,7 @@ bool TestTriangulation(const vector<CloudPoint>& pcloud, const Matx34d& P, vecto
 	return true;
 }
 
-bool TestCoplanarity(const vector<CloudPoint>& pcloud, vector<int>& nonplaneIdx)
+bool TestCoplanarity(const vector<CloudPoint>& pcloud, vector<int>& planeIdx, vector<int>& nonplaneIdx)
 {
 	nonplaneIdx.clear();
  	cv::Mat_<double> cldm(pcloud.size(),3);
@@ -347,7 +347,10 @@ bool TestCoplanarity(const vector<CloudPoint>& pcloud, vector<int>& nonplaneIdx)
 		Vec3d w = Vec3d(pcloud[i].pt) - x0;
 		double D = fabs(nrm.dot(w));
 
-		if(D < p_to_plane_thresh) num_inliers++;
+		if(D < p_to_plane_thresh){
+			num_inliers++;
+			planeIdx.push_back(i);
+		}
                 else nonplaneIdx.push_back(i);
 	}
 
@@ -502,17 +505,17 @@ bool FindCameraMatricesWithH(const Mat& K,
 		vector<KeyPoint> imgpts2_good2;
 
 		Mat H = GetHomographyMat(imgpts1,imgpts2,imgpts1_good,imgpts2_good,matches,nonmatches);
-		if(matches.size() < 30/*100*/) { // || ((double)imgpts1_good.size() / (double)    imgpts1.size()) < 0.25
+		if(matches.size() < 15/*30*//*100*/) { // || ((double)imgpts1_good.size() / (double)    imgpts1.size()) < 0.25
                 	cerr << "not enough inliers after H matrix" << endl;
                 	return false;
                 }
-		if(nonmatches.size() < 20){
+		if(nonmatches.size() < 10/*20*/){
 			cerr << "not enough points left for second plane" << endl;
 			return false;
 		}
 		matches2 = nonmatches;
 		Mat H2 = GetHomographyMat(imgpts1,imgpts2,imgpts1_good2,imgpts2_good2,matches2,nonmatches2);
-		if(matches2.size() < 20)
+		if(matches2.size() < 10/*20*/)
 		{
 			cerr << "could not find second plane: not enough inliers" << endl;
 			return false;

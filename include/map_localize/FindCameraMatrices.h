@@ -20,7 +20,7 @@
 
 bool CheckCoherentRotation(cv::Mat_<double>& R);
 bool TestTriangulation(const std::vector<CloudPoint>& pcloud, const cv::Matx34d& P, std::vector<uchar>& status);
-bool TestCoplanarity(const std::vector<CloudPoint>& pcloud, std::vector<int>& nonplaneIdx);
+bool TestCoplanarity(const std::vector<CloudPoint>& pcloud, std::vector<int>& planeIdx, std::vector<int>& nonplaneIdx);
 
 cv::Mat GetHomographyMat(	const std::vector<cv::KeyPoint>& imgpts1,
 							const std::vector<cv::KeyPoint>& imgpts2,

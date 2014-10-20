@@ -9,6 +9,7 @@
 #include <cv_bridge/cv_bridge.h>
 
 #include "map_localize/FindCameraMatrices.h"
+#include "map_localize/Triangulation.h"
 
 #include "visualization_msgs/Marker.h"
 #include "visualization_msgs/MarkerArray.h"
@@ -23,9 +24,14 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     nh_private(nh_private)
 {
 
+  // TODO: read K and distcoeff from param file
+  K << 701.907522339299, 0, 352.73599016194, 0, 704.43277859417, 230.636873050629, 0, 0, 1;
+  distcoeff = Eigen::VectorXf(5);
+  distcoeff << -0.456758192707853, 0.197636354824418, 0.000543685887014507, 0.000401738655456894, 0;
+
   // TODO: make filepath param
   std::string filename = "/home/matt/Documents/doc.xml";
-  if(!LoadPhotoscanFile(filename, "data/GFTTKeypointsAndDescriptors.yml", false))
+  if(!LoadPhotoscanFile(filename, "data/GFTTKeypointsAndDescriptors1500.yml", true))
   {
     return;
   }
@@ -38,6 +44,7 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   epos_marker_pub = nh.advertise<visualization_msgs::Marker>("/map_localize/estimated_position", 0);
   apos_marker_pub = nh.advertise<visualization_msgs::Marker>("/map_localize/actual_position", 0);
   path_marker_pub = nh.advertise<visualization_msgs::Marker>("/map_localize/estimated_path", 0);
+  pointcloud_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZ> >("/map_localize/pointcloud", 0);
 
   image_subscriber = nh.subscribe("image", 0, &MapLocalizer::HandleImage, this, ros::TransportHints().tcpNoDelay());
 
@@ -74,9 +81,9 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
     //Mat test = imread("/home/matt/uav_image_data/run11/frame0039.jpg", CV_LOAD_IMAGE_GRAYSCALE );
     //KeyframeContainer* kf = new KeyframeContainer(test, Eigen::Matrix4f());
     //KeyframeContainer* kf = currentKeyframe;
-    KeyframeContainer* kf = keyframes[rand() % keyframes.size()];
+    KeyframeContainer* kf = keyframes[50];//keyframes[rand() % keyframes.size()];
 
-    std::vector< KeyframeMatch > matches = FindImageMatches(kf, 20);//, isLocalized); // Only do local search if position is known
+    std::vector< KeyframeMatch > matches = FindImageMatches(kf, 5);//, isLocalized); // Only do local search if position is known
     std::vector< KeyframeMatch > goodMatches;
     std::vector< Eigen::Vector3f > goodTVecs;
 
@@ -92,6 +99,9 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       }
     }
 
+    PublishPointCloud(GetPointCloudFromFrames(matches[1].kfc, matches[4].kfc));
+    PlotTf(matches[1].kfc->GetTf(), "match1");
+    PlotTf(matches[4].kfc->GetTf(), "match2");
 #ifdef SHOW_MATCHES_
     namedWindow( "Query", WINDOW_AUTOSIZE );// Create a window for display.
     imshow( "Query", kf->GetImage() ); 
@@ -130,13 +140,48 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
   }
 }
 
+void MapLocalizer::PlotTf(Eigen::Matrix4f tf, std::string name)
+{
+  tf::Transform tf_transform;
+  tf_transform.setOrigin(tf::Vector3(tf(0,3), tf(1,3), tf(2,3)));
+  tf_transform.setBasis(tf::Matrix3x3(tf(0,0), tf(0,1), tf(0,2),
+                                      tf(1,0), tf(1,1), tf(1,2),
+                                      tf(2,0), tf(2,1), tf(2,2)));
+  br.sendTransform(tf::StampedTransform(tf_transform, ros::Time::now(), "markers", name));
+}
+
+void MapLocalizer::PublishPointCloud(const std::vector<pcl::PointXYZ>& pc)
+{
+  pcl::PointCloud<pcl::PointXYZ> msg;
+  msg.header.frame_id = "/markers";
+  msg.header.stamp = ros::Time();
+
+  for(unsigned int i = 0; i < pc.size(); i++)
+  {
+    msg.points.push_back(pc[i]);
+  }
+
+  pointcloud_pub.publish(msg);
+}
+
 void MapLocalizer::PublishMap()
 {
-  Eigen::Quaterniond q;
-  q.setFromTwoVectors(Eigen::Vector3d(0,-.8,-.3), Eigen::Vector3d(0,0,1));
+  tf::Transform transform;
+  transform.setOrigin( tf::Vector3(0.0, 0.0, 0.0) );
+  tf::Quaternion qtf;
+  qtf.setRPY(0.0, 0, 0);
+  transform.setRotation(qtf);
+  br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map_localize", "world"));
+  
+  tf::Transform marker_transform;
+  marker_transform.setOrigin( tf::Vector3(0.0, 0.0, 0.0) );
+  tf::Quaternion marker_qtf;
+  marker_qtf.setRPY(0, 150.*(M_PI/180), 0);
+  marker_transform.setRotation(marker_qtf);
+  br.sendTransform(tf::StampedTransform(marker_transform, ros::Time::now(), "world", "markers"));
 
   visualization_msgs::Marker marker;
-  marker.header.frame_id = "/world";
+  marker.header.frame_id = "/markers";
   marker.header.stamp = ros::Time();
   marker.ns = "map_localize";
   marker.id = 0;
@@ -145,14 +190,14 @@ void MapLocalizer::PublishMap()
   marker.pose.position.x = 0;
   marker.pose.position.y = 0;
   marker.pose.position.z = 0;
-  marker.pose.orientation.x = q.x();
-  marker.pose.orientation.y = q.y();
-  marker.pose.orientation.z = q.z();
-  marker.pose.orientation.w = q.w();
+  marker.pose.orientation.x = 0;
+  marker.pose.orientation.y = 0;
+  marker.pose.orientation.z = 0;
+  marker.pose.orientation.w = 0;
   marker.scale.x = 1.0;
   marker.scale.y = 1.0;
   marker.scale.z = 1.0;
-  marker.color.a = 1.0;
+  marker.color.a = 0.6;
   marker.color.r = 0.5;
   marker.color.g = 0.5;
   marker.color.b = 0.5;
@@ -164,9 +209,6 @@ void MapLocalizer::PublishMap()
 
 void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImgTf, std::vector< KeyframeMatch > matches, std::vector< Eigen::Vector3f > tvecs)
 {
-  Eigen::Quaterniond q;
-  q.setFromTwoVectors(Eigen::Vector3d(0,-.8,-.3), Eigen::Vector3d(0,0,1));
-  
   const double ptSize = 0.1;
 
   std::vector<geometry_msgs::Point> match_pos;
@@ -180,7 +222,7 @@ void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImg
   }
   visualization_msgs::Marker match_marker;
 
-  match_marker.header.frame_id = "/world";
+  match_marker.header.frame_id = "/markers";
   match_marker.header.stamp = ros::Time();
   match_marker.ns = "map_localize";
   match_marker.id = 1;
@@ -189,10 +231,10 @@ void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImg
   match_marker.pose.position.x = 0;
   match_marker.pose.position.y = 0;
   match_marker.pose.position.z = 0;
-  match_marker.pose.orientation.x = q.x();
-  match_marker.pose.orientation.y = q.y();
-  match_marker.pose.orientation.z = q.z();
-  match_marker.pose.orientation.w = q.w();
+  match_marker.pose.orientation.x = 0;
+  match_marker.pose.orientation.y = 0;
+  match_marker.pose.orientation.z = 0;
+  match_marker.pose.orientation.w = 0;
   match_marker.scale.x = ptSize;
   match_marker.scale.y = ptSize;
   match_marker.scale.z = ptSize;
@@ -217,7 +259,7 @@ void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImg
     vec_pos.push_back(match_pos[i]);
     vec_pos.push_back(endpt);
 
-    tvec_marker.header.frame_id = "/world";
+    tvec_marker.header.frame_id = "/markers";
     tvec_marker.header.stamp = ros::Time();
     tvec_marker.ns = "map_localize";
     tvec_marker.id = 2+i;
@@ -226,10 +268,10 @@ void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImg
     tvec_marker.pose.position.x = 0; 
     tvec_marker.pose.position.y = 0; 
     tvec_marker.pose.position.z = 0; 
-    tvec_marker.pose.orientation.x = q.x();
-    tvec_marker.pose.orientation.y = q.y();
-    tvec_marker.pose.orientation.z = q.z();
-    tvec_marker.pose.orientation.w = q.w();
+    tvec_marker.pose.orientation.x = 0;
+    tvec_marker.pose.orientation.y = 0;
+    tvec_marker.pose.orientation.z = 0;
+    tvec_marker.pose.orientation.w = 0;
     tvec_marker.scale.x = 0.08;
     tvec_marker.scale.y = 0.11;
     tvec_marker.color.a = 1.0;
@@ -255,7 +297,7 @@ void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImg
   epos.push_back(epos_pt);
   visualization_msgs::Marker epos_marker;
  
-  epos_marker.header.frame_id = "/world";
+  epos_marker.header.frame_id = "/markers";
   epos_marker.header.stamp = ros::Time();
   epos_marker.ns = "map_localize";
   epos_marker.id = 900;
@@ -264,10 +306,10 @@ void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImg
   epos_marker.pose.position.x = 0;
   epos_marker.pose.position.y = 0;
   epos_marker.pose.position.z = 0;
-  epos_marker.pose.orientation.x = q.x();
-  epos_marker.pose.orientation.y = q.y();
-  epos_marker.pose.orientation.z = q.z();
-  epos_marker.pose.orientation.w = q.w();
+  epos_marker.pose.orientation.x = 0;
+  epos_marker.pose.orientation.y = 0;
+  epos_marker.pose.orientation.z = 0;
+  epos_marker.pose.orientation.w = 0;
   epos_marker.scale.x = ptSize;
   epos_marker.scale.y = ptSize;
   epos_marker.scale.z = ptSize;
@@ -287,7 +329,7 @@ void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImg
   apos.push_back(apos_pt);
   visualization_msgs::Marker apos_marker;
  
-  apos_marker.header.frame_id = "/world";
+  apos_marker.header.frame_id = "/markers";
   apos_marker.header.stamp = ros::Time();
   apos_marker.ns = "map_localize";
   apos_marker.id = 901;
@@ -296,10 +338,10 @@ void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImg
   apos_marker.pose.position.x = 0;
   apos_marker.pose.position.y = 0;
   apos_marker.pose.position.z = 0;
-  apos_marker.pose.orientation.x = q.x();
-  apos_marker.pose.orientation.y = q.y();
-  apos_marker.pose.orientation.z = q.z();
-  apos_marker.pose.orientation.w = q.w();
+  apos_marker.pose.orientation.x = 0;
+  apos_marker.pose.orientation.y = 0;
+  apos_marker.pose.orientation.z = 0;
+  apos_marker.pose.orientation.w = 0;
   apos_marker.scale.x = ptSize;
   apos_marker.scale.y = ptSize;
   apos_marker.scale.z = ptSize;
@@ -322,7 +364,7 @@ void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImg
   }
 
   visualization_msgs::Marker path_viz;
-  path_viz.header.frame_id = "/world";
+  path_viz.header.frame_id = "/markers";
   path_viz.header.stamp = ros::Time();
   path_viz.ns = "map_localize";
   path_viz.id = 902;
@@ -331,10 +373,10 @@ void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImg
   path_viz.pose.position.x = 0;
   path_viz.pose.position.y = 0;
   path_viz.pose.position.z = 0;
-  path_viz.pose.orientation.x = q.x();
-  path_viz.pose.orientation.y = q.y();
-  path_viz.pose.orientation.z = q.z();
-  path_viz.pose.orientation.w = q.w();
+  path_viz.pose.orientation.x = 0;
+  path_viz.pose.orientation.y = 0;
+  path_viz.pose.orientation.z = 0;
+  path_viz.pose.orientation.w = 0;
   path_viz.scale.x = .05;
   path_viz.color.a = 1.0;
   path_viz.color.r = 0;
@@ -345,12 +387,76 @@ void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImg
   path_marker_pub.publish(path_viz);
 
 
-  tf::Transform transform;
-  transform.setOrigin( tf::Vector3(0.0, 0.0, 0.0) );
-  tf::Quaternion qtf;
-  qtf.setRPY(0.0, 0, 0);
-  transform.setRotation(qtf);
-  br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", "map_localize"));
+}
+
+std::vector<pcl::PointXYZ> MapLocalizer::GetPointCloudFromFrames(KeyframeContainer* kfc1, KeyframeContainer* kfc2)
+{
+  std::vector<CloudPoint> pcCv;	
+  std::vector<pcl::PointXYZ> pc;	
+  std::vector<KeyPoint> correspImg1Pt;
+  const double matchRatio = 0.75;
+	
+  Matx33d Kcv(K(0,0), K(0,1), K(0,2),
+              K(1,0), K(1,1), K(1,2),
+              K(2,0), K(2,1), K(2,2));
+  Mat distcoeffcv = (Mat_<double>(5,1) << distcoeff(0), distcoeff(1), distcoeff(2), distcoeff(3), distcoeff(4)); 
+  
+  Eigen::Matrix4f tf1 = kfc1->GetTf().inverse();
+  Eigen::Matrix4f tf2 = kfc2->GetTf().inverse();
+
+  Matx34d P(tf1(0,0), tf1(0,1), tf1(0,2), tf1(0,3),
+            tf1(1,0), tf1(1,1), tf1(1,2), tf1(1,3), 
+            tf1(2,0), tf1(2,1), tf1(2,2), tf1(2,3));
+  Matx34d P1(tf2(0,0), tf2(0,1), tf2(0,2), tf2(0,3),
+             tf2(1,0), tf2(1,1), tf2(1,2), tf2(1,3), 
+             tf2(2,0), tf2(2,1), tf2(2,2), tf2(2,3));
+  
+
+  //Find matches between kfc1 and kfc2
+  FlannBasedMatcher matcher;
+  std::vector < std::vector< DMatch > > matches;
+  matcher.knnMatch( kfc1->GetDescriptors(), kfc2->GetDescriptors(), matches, 2 );
+
+  std::vector< DMatch > goodMatches;
+  std::vector< DMatch > allMatches;
+  std::vector<Point3d> triangulatedPts1;
+  std::vector<Point3d> triangulatedPts2;
+  std::vector<KeyPoint> matchKps1;
+  std::vector<KeyPoint> matchKps2;
+
+
+  // Use ratio test to find good keypoint matches
+  for(unsigned int j = 0; j < matches.size(); j++)
+  {
+    allMatches.push_back(matches[j][0]);
+    if(matches[j][0].distance < matchRatio*matches[j][1].distance)
+    {
+      
+      Point2f pt1 = kfc1->GetKeypoints()[matches[j][0].queryIdx].pt;
+      Point2f pt2 = kfc2->GetKeypoints()[matches[j][0].trainIdx].pt;
+      Mat_<double> triPt = LinearLSTriangulation(Point3d(pt1.x, pt1.y, 1), Kcv*P, Point3d(pt2.x, pt2.y, 1), Kcv*P1);
+      
+      Eigen::Vector4f ptHom(triPt(0), triPt(1), triPt(2), 1);
+      //ptHom = kfc1->GetTf()*ptHom;
+
+      pc.push_back(pcl::PointXYZ(ptHom(0), ptHom(1), ptHom(2)));
+      
+
+      goodMatches.push_back(matches[j][0]);
+      matchKps1.push_back(kfc1->GetKeypoints()[matches[j][0].queryIdx]);
+      matchKps2.push_back(kfc2->GetKeypoints()[matches[j][0].trainIdx]);
+    }
+  }
+ 
+#ifdef SHOW_MATCHES_
+  namedWindow("matches", 1);
+  Mat img_matches;
+  drawMatches(kfc1->GetImage(), kfc1->GetKeypoints(), kfc2->GetImage(), kfc2->GetKeypoints(), goodMatches, img_matches);
+  imshow("matches", img_matches);
+  waitKey(0); 
+#endif
+  
+  return pc;
 }
 
 Eigen::Matrix4f MapLocalizer::StringToMatrix4f(std::string str)
@@ -385,6 +491,12 @@ bool MapLocalizer::LoadPhotoscanFile(std::string filename, std::string desc_file
 {
   FileStorage fs;
   TiXmlDocument doc(filename);
+
+  Matx33d Kcv(K(0,0), K(0,1), K(0,2),
+              K(1,0), K(1,1), K(1,2),
+              K(2,0), K(2,1), K(2,2));
+  Mat distcoeffcv = (Mat_<double>(5,1) << distcoeff(0), distcoeff(1), distcoeff(2), distcoeff(3), distcoeff(4)); 
+  
   std::cout << "Loading " << filename << "..." << std::flush;
   if(!doc.LoadFile())
   {  
@@ -425,13 +537,17 @@ bool MapLocalizer::LoadPhotoscanFile(std::string filename, std::string desc_file
         //std::cout << "Loading: " << filename << std::endl;
         //std::cout << tfStr << std::endl;
 
-        Mat img = imread(filename, CV_LOAD_IMAGE_GRAYSCALE );
-        if(! img.data )                             
+        Mat img_in = imread(filename, CV_LOAD_IMAGE_GRAYSCALE );
+        
+        if(! img_in.data )                             
         {
           std::cout <<  "Could not open or find the image " << filename << std::endl ;
           return false;
         }
-        
+
+        Mat img_undistort;
+        undistort(img_in, img_undistort, Kcv, distcoeffcv);
+
         Eigen::Matrix4f tf = StringToMatrix4f(tfStr);
         //std::cout << tf << std::endl;
 
@@ -447,11 +563,11 @@ bool MapLocalizer::LoadPhotoscanFile(std::string filename, std::string desc_file
           fs[std::string("descriptors") + ss.str()] >> descriptors;
           FileNode kpn = fs[std::string("keypoints") + ss.str()];
           read(kpn, keypoints); 
-          kfc = new KeyframeContainer(img, tf, keypoints, descriptors);
+          kfc = new KeyframeContainer(img_undistort, tf, keypoints, descriptors);
         }
         else
         {  
-          kfc = new KeyframeContainer(img, tf);
+          kfc = new KeyframeContainer(img_undistort, tf);
         }
         keyframes.push_back(kfc);    
       }
@@ -566,12 +682,11 @@ Eigen::Matrix4f MapLocalizer::FindImageTf(KeyframeContainer* img, std::vector< K
   goodMatches.clear();
   goodTVecs.clear();
 
-  double km[3][3] = {{701.907522339299, 0, 352.73599016194}, {0, 704.43277859417, 230.636873050629}, {0, 0, 1}};
-  //double dm[5] = {0,0,0,0,0};
-  double dm[5] = {-0.456758192707853, 0.197636354824418, 0.000543685887014507, 0.000401738655456894, 0};
-  Mat K(3,3, CV_64FC1, km);
-  Mat dist = Mat(3,1, CV_64FC1, dm);
-  
+  Mat Kcv = (Mat_<double>(3,3) << K(0,0), K(0,1), K(0,2),
+                                 K(1,0), K(1,1), K(1,2),
+                                 K(2,0), K(2,1), K(2,2)); 
+  Mat distcoeffcv = (Mat_<double>(5,1) << distcoeff(0), distcoeff(1), distcoeff(2), distcoeff(3), distcoeff(4)); 
+
   for(unsigned int i = 0; i < matches.size(); i++)
   {
     Matx34d P(1,0,0,0,
@@ -590,8 +705,8 @@ Eigen::Matrix4f MapLocalizer::FindImageTf(KeyframeContainer* img, std::vector< K
     //std::vector<DMatch> ptmatches = matches[i].allMatches; // Uses all keypoint matches
     std::vector<CloudPoint> outCloud;
 
-    bool goodH = FindCameraMatricesWithH(K, K.inv(), dist, img->GetKeypoints(), matches[i].kfc->GetKeypoints(), matchPts1_good, matchPts2_good, P, P1, ptmatches);
-    //bool goodF = FindCameraMatrices(K, K.inv(), dist, img->GetKeypoints(), matches[i].kfc->GetKeypoints(), matchPts1_good, matchPts2_good, P, P1, ptmatches, outCloud);
+    bool goodH = FindCameraMatricesWithH(Kcv, Kcv.inv(), distcoeffcv, img->GetKeypoints(), matches[i].kfc->GetKeypoints(), matchPts1_good, matchPts2_good, P, P1, ptmatches);
+    //bool goodF = FindCameraMatrices(Kcv, Kcv.inv(), distcoeffcv, img->GetKeypoints(), matches[i].kfc->GetKeypoints(), matchPts1_good, matchPts2_good, P, P1, ptmatches, outCloud);
     std::cout << "goodH: " << goodH << std::endl; 
     
     if(goodH)

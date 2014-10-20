@@ -6,7 +6,7 @@ KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, int minHessi
 {
   //SurfFeatureDetector detector(minHessian);
   //SiftFeatureDetector detector;
-  GoodFeaturesToTrackDetector detector;
+  GoodFeaturesToTrackDetector detector(1500, 0.01, 1.0);
   detector.detect(img, keypoints);
   
   //SurfDescriptorExtractor extractor;
