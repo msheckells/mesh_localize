@@ -16,7 +16,7 @@ class KeyframeContainer
 {
 public:
   KeyframeContainer(Mat image, Eigen::Matrix4f tf = Eigen::Matrix4f(), int minHessian = 200);
-  KeyframeContainer(Mat image, Eigen::Matrix4f tf, std::vector<KeyPoint>& keypoints, Mat descriptors, int minHessian = 200);
+  KeyframeContainer(Mat image, Eigen::Matrix4f tf, std::vector<KeyPoint>& keypoints, Mat& descriptors, int minHessian = 200);
   
   Mat GetImage();
   Mat GetDescriptors();

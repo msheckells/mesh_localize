@@ -35,6 +35,8 @@ public:
 private:
   std::vector< KeyframeMatch > FindImageMatches(KeyframeContainer* img, int k, bool usePos = false);
   Eigen::Matrix4f FindImageTf(KeyframeContainer* img, std::vector< KeyframeMatch >, std::vector< KeyframeMatch >& goodMatches, std::vector< Eigen::Vector3f >& goodTVecs);
+  std::vector<pcl::PointXYZ> GetPointCloudFromFrames(KeyframeContainer*, KeyframeContainer*);
+  
   void PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImgTf, std::vector< KeyframeMatch > matches, std::vector< Eigen::Vector3f > tvecs);
   void PublishMap();
   void PublishPointCloud(const std::vector<pcl::PointXYZ>&);
@@ -46,7 +48,7 @@ private:
   bool WriteDescriptorsToFile(std::string filename);
   bool LoadPhotoscanFile(std::string filename, std::string desc_filename = "", bool load_descs = false);
   Eigen::Matrix4f StringToMatrix4f(std::string);
-  std::vector<pcl::PointXYZ> GetPointCloudFromFrames(KeyframeContainer*, KeyframeContainer*);
+  std::vector<Point3d> PCLToPoint3d(const std::vector<pcl::PointXYZ>& cpvec);
 
   std::vector<KeyframeContainer*> keyframes;
   KeyframeContainer* currentKeyframe;

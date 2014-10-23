@@ -24,7 +24,8 @@ using namespace cv;
 Mat_<double> LinearLSTriangulation(Point3d u,		//homogenous image point (u,v,1)
 								   Matx34d P,		//camera 1 matrix
 								   Point3d u1,		//homogenous image point in 2nd camera
-								   Matx34d P1		//camera 2 matrix
+								   Matx34d P1,		//camera 2 matrix
+                                                                   double* reprojError
 								   ) 
 {
 	
@@ -57,6 +58,24 @@ Mat_<double> LinearLSTriangulation(Point3d u,		//homogenous image point (u,v,1)
 	Mat_<double> X;
 	solve(A,B,X,DECOMP_SVD);
 	
+                
+	if(reprojError)
+	{
+		Vec4d Xv(X(0), X(1), X(2), 1);
+		//std::cout << "3dpt: " << Mat(Xv) << std::endl;
+	
+		Vec3d reprojP = P*Xv;
+		Vec3d reprojP1 = P1*Xv;
+
+		reprojP = reprojP/reprojP(2);
+		reprojP1 = reprojP1/reprojP1(2);
+		//std::cout << "Reproj Pt: " << Mat(reprojP) << std::endl;
+		//std::cout << "Actual Pt: " << Mat(u) << std::endl;
+
+		double reprojErrorP = sqrt((reprojP(0)-u.x)*(reprojP(0)-u.x) + (reprojP(1)-u.y)*(reprojP(1)-u.y));
+		double reprojErrorP1 = sqrt((reprojP1(0)-u1.x)*(reprojP1(0)-u1.x) + (reprojP1(1)-u1.y)*(reprojP1(1)-u1.y));
+		*reprojError = (reprojErrorP + reprojErrorP1)/2;
+	}
 	return X;
 }
 
@@ -107,8 +126,8 @@ Mat_<double> IterativeLinearLSTriangulation(Point3d u,	//homogenous image point 
 //Triagulate points
 double TriangulatePoints(const vector<KeyPoint>& pt_set1, 
 						const vector<KeyPoint>& pt_set2, 
-						const Mat& K,
-						const Mat& Kinv,
+						const Matx33d& K,
+						const Matx33d& Kinv,
 						const Mat& distcoeff,
 						const Matx34d& P,
 						const Matx34d& P1,
@@ -126,12 +145,45 @@ double TriangulatePoints(const vector<KeyPoint>& pt_set1,
 				P1(1,0),P1(1,1),P1(1,2),P1(1,3),
 				P1(2,0),P1(2,1),P1(2,2),P1(2,3),
 				0,		0,		0,		1);
-	Matx44d P1inv(P1_.inv());
+	Matx44d P1invH(P1_.inv());
+	Matx34d P1inv(P1invH(0,0),P1invH(0,1),P1invH(0,2),P1invH(0,3),
+                     P1invH(1,0),P1invH(1,1),P1invH(1,2),P1invH(1,3),
+                     P1invH(2,0),P1invH(2,1),P1invH(2,2),P1invH(2,3));
 	
+	Matx44d P_(P(0,0),P(0,1),P(0,2),P(0,3),
+				P(1,0),P(1,1),P(1,2),P(1,3),
+				P(2,0),P(2,1),P(2,2),P(2,3),
+				0,		0,		0,		1);
+	Matx44d PinvH(P_.inv());
+	Matx34d Pinv(PinvH(0,0),PinvH(0,1),PinvH(0,2),PinvH(0,3),
+                     PinvH(1,0),PinvH(1,1),PinvH(1,2),PinvH(1,3),
+                     PinvH(2,0),PinvH(2,1),PinvH(2,2),PinvH(2,3));
+
+
+	double meanre = 0;
 	cout << "Triangulating...";
-	double t = getTickCount();
-	vector<double> reproj_error;
-	unsigned int pts_size = pt_set1.size();
+	for(unsigned int j = 0; j < pt_set1.size(); j++)
+	{
+		CloudPoint cp_pt;
+
+		Point2f pt1 = pt_set1[j].pt;
+		Point2f pt2 = pt_set2[j].pt;
+		Mat_<double> triPt = LinearLSTriangulation(Point3d(pt1.x, pt1.y, 1), K*Pinv, Point3d(pt2.x, pt2.y, 1), K*P1inv, &(cp_pt.reprojection_error));
+		meanre += cp_pt.reprojection_error/pt_set1.size();
+
+		//if(cp_pt.reprojection_error < 1.)
+		{
+			cp_pt.pt = Point3d(triPt(0), triPt(1), triPt(2));
+			pointcloud.push_back(cp_pt);
+			correspImg1Pt.push_back(pt_set1[j]);	
+		}
+	}
+	cout << "Done. ("<<pointcloud.size()<<"points, mean reproj err = " << meanre << ")"<< endl;
+
+	return meanre;
+	//double t = getTickCount();
+	//vector<double> reproj_error;
+	//unsigned int pts_size = pt_set1.size();
 	
 #if 0
 	//Using OpenCV's triangulation
@@ -166,7 +218,9 @@ double TriangulatePoints(const vector<KeyPoint>& pt_set1,
 		pointcloud.push_back(cp);
 		reproj_error.push_back(norm(_pt_set1_pt[i]-reprojected_pt_set1[i]));
 	}
+
 #else
+/* START OF ORIGINALLY USED CODE
 	Mat_<double> KP1 = K * Mat(P1);
 #pragma omp parallel for num_threads(1)
 	for (int i=0; i<pts_size; i++) {
@@ -207,8 +261,9 @@ double TriangulatePoints(const vector<KeyPoint>& pt_set1,
 #endif
 		}
 	}
+*/
 #endif
-	
+/*	
 	Scalar mse = mean(reproj_error);
 	t = ((double)getTickCount() - t)/getTickFrequency();
 	cout << "Done. ("<<pointcloud.size()<<"points, " << t <<"s, mean reproj err = " << mse[0] << ")"<< endl;
@@ -231,4 +286,5 @@ double TriangulatePoints(const vector<KeyPoint>& pt_set1,
 #endif
 	
 	return mse[0];
+*/
 }

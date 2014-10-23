@@ -30,7 +30,7 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   distcoeff << -0.456758192707853, 0.197636354824418, 0.000543685887014507, 0.000401738655456894, 0;
 
   // TODO: make filepath param
-  std::string filename = "/home/matt/Documents/doc.xml";
+  std::string filename = "/home/matt/Documents/campus_doc.xml";
   if(!LoadPhotoscanFile(filename, "data/GFTTKeypointsAndDescriptors1500.yml", true))
   {
     return;
@@ -76,14 +76,14 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
 {
   
   PublishMap();
-  //if(currentKeyframe)
+  if(currentKeyframe)
   {
     //Mat test = imread("/home/matt/uav_image_data/run11/frame0039.jpg", CV_LOAD_IMAGE_GRAYSCALE );
     //KeyframeContainer* kf = new KeyframeContainer(test, Eigen::Matrix4f());
-    //KeyframeContainer* kf = currentKeyframe;
-    KeyframeContainer* kf = keyframes[50];//keyframes[rand() % keyframes.size()];
+    KeyframeContainer* kf = currentKeyframe;
+    //KeyframeContainer* kf = keyframes[rand() % keyframes.size()];
 
-    std::vector< KeyframeMatch > matches = FindImageMatches(kf, 5);//, isLocalized); // Only do local search if position is known
+    std::vector< KeyframeMatch > matches = FindImageMatches(kf, 5, isLocalized); // Only do local search if position is known
     std::vector< KeyframeMatch > goodMatches;
     std::vector< Eigen::Vector3f > goodTVecs;
 
@@ -98,10 +98,23 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
         return;
       }
     }
-
-    PublishPointCloud(GetPointCloudFromFrames(matches[1].kfc, matches[4].kfc));
+    ROS_INFO("Found matches");
+    std::vector<pcl::PointXYZ> pclCloud = GetPointCloudFromFrames(matches[1].kfc, matches[2].kfc);
+    std::vector<Point3d> cvCloud = PCLToPoint3d(pclCloud);
+    std::vector<int> planeIdx, nonplaneIdx;
+    ROS_INFO("Got point cloud");
+    if(pclCloud.size() > 5)
+    {
+      PublishPointCloud(pclCloud);
+      TestCoplanarity(cvCloud, planeIdx, nonplaneIdx);
+      ROS_INFO("Tested for planes");
+    }
+    else
+    {
+      ROS_INFO("No point cloud available");
+    }
     PlotTf(matches[1].kfc->GetTf(), "match1");
-    PlotTf(matches[4].kfc->GetTf(), "match2");
+    PlotTf(matches[2].kfc->GetTf(), "match2");
 #ifdef SHOW_MATCHES_
     namedWindow( "Query", WINDOW_AUTOSIZE );// Create a window for display.
     imshow( "Query", kf->GetImage() ); 
@@ -115,7 +128,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
 #endif
 
     Eigen::Matrix4f imgTf = FindImageTf(kf, matches, goodMatches, goodTVecs);
-    
+    ROS_INFO("Found image tf");
     if(goodMatches.size() >= 2)
     {
       isLocalized = true;
@@ -135,8 +148,8 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
 
     // For now just delete currentKeyframe, should probably add to keyframe list 
     // if tf estimate is good enough
-    //delete currentKeyframe;
-    //currentKeyframe = NULL;
+    delete currentKeyframe;
+    currentKeyframe = NULL;
   }
 }
 
@@ -197,7 +210,7 @@ void MapLocalizer::PublishMap()
   marker.scale.x = 1.0;
   marker.scale.y = 1.0;
   marker.scale.z = 1.0;
-  marker.color.a = 0.6;
+  marker.color.a = 1.0;
   marker.color.r = 0.5;
   marker.color.g = 0.5;
   marker.color.b = 0.5;
@@ -245,6 +258,25 @@ void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImg
   match_marker.points = match_pos;
 
   match_marker_pub.publish(match_marker);
+
+  
+  std::vector<visualization_msgs::Marker> tvec_markers_toremove;
+  for(unsigned int i = 0; i < 30; i++)
+  {
+    visualization_msgs::Marker tvec_marker;
+    tvec_marker.header.frame_id = "/markers";
+    tvec_marker.header.stamp = ros::Time();
+    tvec_marker.ns = "map_localize";
+    tvec_marker.id = 2+i;
+    tvec_marker.type = visualization_msgs::Marker::ARROW;
+    tvec_marker.action = visualization_msgs::Marker::DELETE;
+    
+    tvec_markers_toremove.push_back(tvec_marker);
+  }
+  visualization_msgs::MarkerArray tvec_array_toremove;
+  tvec_array_toremove.markers = tvec_markers_toremove;
+
+  tvec_marker_pub.publish(tvec_array_toremove);
 
   std::vector<visualization_msgs::Marker> tvec_markers;
   for(unsigned int i = 0; i < matches.size(); i++)
@@ -394,7 +426,7 @@ std::vector<pcl::PointXYZ> MapLocalizer::GetPointCloudFromFrames(KeyframeContain
   std::vector<CloudPoint> pcCv;	
   std::vector<pcl::PointXYZ> pc;	
   std::vector<KeyPoint> correspImg1Pt;
-  const double matchRatio = 0.75;
+  const double matchRatio = 0.85;
 	
   Matx33d Kcv(K(0,0), K(0,1), K(0,2),
               K(1,0), K(1,1), K(1,2),
@@ -425,28 +457,30 @@ std::vector<pcl::PointXYZ> MapLocalizer::GetPointCloudFromFrames(KeyframeContain
   std::vector<KeyPoint> matchKps2;
 
 
+  double* reprojError = new double;
   // Use ratio test to find good keypoint matches
   for(unsigned int j = 0; j < matches.size(); j++)
   {
     allMatches.push_back(matches[j][0]);
     if(matches[j][0].distance < matchRatio*matches[j][1].distance)
     {
-      
       Point2f pt1 = kfc1->GetKeypoints()[matches[j][0].queryIdx].pt;
       Point2f pt2 = kfc2->GetKeypoints()[matches[j][0].trainIdx].pt;
-      Mat_<double> triPt = LinearLSTriangulation(Point3d(pt1.x, pt1.y, 1), Kcv*P, Point3d(pt2.x, pt2.y, 1), Kcv*P1);
-      
-      Eigen::Vector4f ptHom(triPt(0), triPt(1), triPt(2), 1);
-      //ptHom = kfc1->GetTf()*ptHom;
+      Mat_<double> triPt = LinearLSTriangulation(Point3d(pt1.x, pt1.y, 1), Kcv*P, Point3d(pt2.x, pt2.y, 1), Kcv*P1, reprojError);
+      //std::cout << "Reproj Error: " << *reprojError << std::endl;
 
-      pc.push_back(pcl::PointXYZ(ptHom(0), ptHom(1), ptHom(2)));
+      if(*reprojError < 1.)
+      {
+        pc.push_back(pcl::PointXYZ(triPt(0), triPt(1), triPt(2)));
       
-
-      goodMatches.push_back(matches[j][0]);
-      matchKps1.push_back(kfc1->GetKeypoints()[matches[j][0].queryIdx]);
-      matchKps2.push_back(kfc2->GetKeypoints()[matches[j][0].trainIdx]);
+        goodMatches.push_back(matches[j][0]);
+        matchKps1.push_back(kfc1->GetKeypoints()[matches[j][0].queryIdx]);
+        matchKps2.push_back(kfc2->GetKeypoints()[matches[j][0].trainIdx]);
+      }
     }
   }
+  
+  delete reprojError;
  
 #ifdef SHOW_MATCHES_
   namedWindow("matches", 1);
@@ -457,6 +491,17 @@ std::vector<pcl::PointXYZ> MapLocalizer::GetPointCloudFromFrames(KeyframeContain
 #endif
   
   return pc;
+}
+
+std::vector<Point3d> MapLocalizer::PCLToPoint3d(const std::vector<pcl::PointXYZ>& cpvec)
+{
+  std::vector<Point3d> points;
+  for(unsigned int i = 0; i < cpvec.size(); i++)
+  {
+    Point3d pt(cpvec[i].x, cpvec[i].y, cpvec[i].z);
+    points.push_back(pt);  
+  }
+  return points;
 }
 
 Eigen::Matrix4f MapLocalizer::StringToMatrix4f(std::string str)
@@ -614,7 +659,7 @@ bool MapLocalizer::WriteDescriptorsToFile(std::string filename)
 std::vector< KeyframeMatch > MapLocalizer::FindImageMatches(KeyframeContainer* img, int k, bool usePos)
 {
   const double numMatchThresh = 0;//0.16;
-  const double matchRatio = 0.8;
+  const double matchRatio = 0.9;
   std::vector< KeyframeMatch > kfMatches;
   unsigned int searchBound = keyframes.size();
 
@@ -682,9 +727,11 @@ Eigen::Matrix4f MapLocalizer::FindImageTf(KeyframeContainer* img, std::vector< K
   goodMatches.clear();
   goodTVecs.clear();
 
-  Mat Kcv = (Mat_<double>(3,3) << K(0,0), K(0,1), K(0,2),
-                                 K(1,0), K(1,1), K(1,2),
-                                 K(2,0), K(2,1), K(2,2)); 
+  bool useH = false;
+
+  Matx33d Kcv(K(0,0), K(0,1), K(0,2),
+              K(1,0), K(1,1), K(1,2),
+              K(2,0), K(2,1), K(2,2)); 
   Mat distcoeffcv = (Mat_<double>(5,1) << distcoeff(0), distcoeff(1), distcoeff(2), distcoeff(3), distcoeff(4)); 
 
   for(unsigned int i = 0; i < matches.size(); i++)
@@ -705,33 +752,70 @@ Eigen::Matrix4f MapLocalizer::FindImageTf(KeyframeContainer* img, std::vector< K
     //std::vector<DMatch> ptmatches = matches[i].allMatches; // Uses all keypoint matches
     std::vector<CloudPoint> outCloud;
 
-    bool goodH = FindCameraMatricesWithH(Kcv, Kcv.inv(), distcoeffcv, img->GetKeypoints(), matches[i].kfc->GetKeypoints(), matchPts1_good, matchPts2_good, P, P1, ptmatches);
-    //bool goodF = FindCameraMatrices(Kcv, Kcv.inv(), distcoeffcv, img->GetKeypoints(), matches[i].kfc->GetKeypoints(), matchPts1_good, matchPts2_good, P, P1, ptmatches, outCloud);
-    std::cout << "goodH: " << goodH << std::endl; 
+    bool goodF = FindCameraMatrices(Kcv, Kcv.inv(), distcoeffcv, img->GetKeypoints(), matches[i].kfc->GetKeypoints(), matchPts1_good, matchPts2_good, P, P1, ptmatches, outCloud);
+    std::cout << "goodF: " << goodF << std::endl; 
     
-    if(goodH)
+    if(goodF)
     {
       Eigen::Matrix4f P1m;
       P1m <<   P1(0,0), P1(0,1), P1(0,2), P1(0,3),
                P1(1,0), P1(1,1), P1(1,2), P1(1,3),
                P1(2,0), P1(2,1), P1(2,2), P1(2,3),
                      0,       0,       0,       1;
-      //Eigen::Matrix4f goodP;
-      //goodP << P1(0,0), P1(0,1), P1(0,2), P1(0,3),
-      //         P1(1,0), P1(1,1), P1(1,2), P1(1,3),
-      //         P1(2,0), P1(2,1), P1(2,2), P1(2,3),
-      //               0,       0,       0,       1;
-      //goodPs.push_back(goodP);
       goodPs.push_back(P1m);
-      //goodPs.push_back(P2m);
       goodMatches.push_back(matches[i]);
     } 
   }
   if(goodPs.size() < 2)
   {
-    std::cout << "Not enough good matches.  Found " << goodPs.size() << std::endl;
-    return tf;
+    ROS_WARN("Not enough good matches.  Found %d. Trying H instead.", (int)goodPs.size());
+    useH = true;
   } 
+
+  if(useH)
+  {
+    goodPs.clear();
+    goodMatches.clear();
+    for(unsigned int i = 0; i < matches.size(); i++)
+    {
+      Matx34d P(1,0,0,0,
+                0,1,0,0, 
+                0,0,1,0);
+      Matx34d P1(1,0,0,0,
+                0,1,0,0,
+                0,0,1,0);
+      Matx34d P2(1,0,0,0,
+                0,1,0,0,
+                0,0,1,0);
+
+      std::vector<KeyPoint> matchPts1_good;
+      std::vector<KeyPoint> matchPts2_good;
+      std::vector<DMatch> ptmatches = matches[i].matches; // Uses only the good matches found with ratio test
+      //std::vector<DMatch> ptmatches = matches[i].allMatches; // Uses all keypoint matches
+      std::vector<CloudPoint> outCloud;
+  
+      bool goodH = FindCameraMatricesWithH(Kcv, Kcv.inv(), distcoeffcv, img->GetKeypoints(), matches[i].kfc->GetKeypoints(), matchPts1_good, matchPts2_good, P1, ptmatches);
+      std::cout << "goodH: " << goodH << std::endl; 
+    
+      if(goodH)
+      {
+        Eigen::Matrix4f P1m;
+        P1m <<   P1(0,0), P1(0,1), P1(0,2), P1(0,3),
+                 P1(1,0), P1(1,1), P1(1,2), P1(1,3),
+                 P1(2,0), P1(2,1), P1(2,2), P1(2,3),
+                       0,       0,       0,       1;
+        goodPs.push_back(P1m);
+        goodMatches.push_back(matches[i]);
+      } 
+    }
+  }
+
+  if(goodPs.size() < 2)
+  {
+    ROS_WARN("Not enough good matches.  Found %d.", (int)goodPs.size());
+    return tf;
+  }
+ 
   std::cout << "--------------------" << std::endl; 
   std::cout << "# of good matches: " << goodPs.size() << "/" << matches.size() << std::endl; 
   std::cout << "Actual Tf: " << std::endl << img->GetTf() << std::endl;
@@ -768,8 +852,8 @@ Eigen::Matrix4f MapLocalizer::FindImageTf(KeyframeContainer* img, std::vector< K
       }
     }
     
-    std::cout << "--------------------" << std::endl; 
-    std::cout << imgWorldtf << std::endl << std::endl;
+    //std::cout << "--------------------" << std::endl; 
+    //std::cout << imgWorldtf << std::endl << std::endl;
     //std::cout << goodMatches[i].kfc->GetTf().transpose()*goodPs[i] << std::endl << std::endl;
   }
   Eigen::VectorXf lsTrans = lsA.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(lsb);

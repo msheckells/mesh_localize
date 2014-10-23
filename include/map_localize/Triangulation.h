@@ -30,7 +30,8 @@
 cv::Mat_<double> LinearLSTriangulation(cv::Point3d u,		//homogenous image point (u,v,1)
 								   cv::Matx34d P,		//camera 1 matrix
 								   cv::Point3d u1,		//homogenous image point in 2nd camera
-								   cv::Matx34d P1		//camera 2 matrix
+								   cv::Matx34d P1,		//camera 2 matrix
+                                                                   double* reprojError = NULL
 								   );
 
 #define EPSILON 0.0001
@@ -45,8 +46,8 @@ cv::Mat_<double> IterativeLinearLSTriangulation(cv::Point3d u,	//homogenous imag
 
 double TriangulatePoints(const std::vector<cv::KeyPoint>& pt_set1, 
 					   const std::vector<cv::KeyPoint>& pt_set2, 
-					   const cv::Mat& K,
-					   const cv::Mat& Kinv,
+					   const cv::Matx33d& K,
+					   const cv::Matx33d& Kinv,
 					   const cv::Mat& distcoeff,
 					   const cv::Matx34d& P,
 					   const cv::Matx34d& P1,

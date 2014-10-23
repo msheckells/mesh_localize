@@ -296,10 +296,11 @@ void TakeSVDOfE(Mat_<double>& E, Mat& svd_u, Mat& svd_vt, Mat& svd_w) {
 	svd_vt = svd_v.t();
 	svd_w = (Mat_<double>(1,3) << svd.singularValues()[0] , svd.singularValues()[1] , svd.singularValues()[2]);
 #endif
-	
+/*	
 	cout << "----------------------- SVD ------------------------\n";
 	cout << "U:\n"<<svd_u<<"\nW:\n"<<svd_w<<"\nVt:\n"<<svd_vt<<endl;
 	cout << "----------------------------------------------------\n";
+*/
 }
 
 bool TestTriangulation(const vector<CloudPoint>& pcloud, const Matx34d& P, vector<uchar>& status) {
@@ -325,14 +326,14 @@ bool TestTriangulation(const vector<CloudPoint>& pcloud, const Matx34d& P, vecto
 	return true;
 }
 
-bool TestCoplanarity(const vector<CloudPoint>& pcloud, vector<int>& planeIdx, vector<int>& nonplaneIdx)
+bool TestCoplanarity(const vector<cv::Point3d>& pcloud, vector<int>& planeIdx, vector<int>& nonplaneIdx)
 {
 	nonplaneIdx.clear();
  	cv::Mat_<double> cldm(pcloud.size(),3);
 	for(unsigned int i=0;i<pcloud.size();i++) {
-		cldm.row(i)(0) = pcloud[i].pt.x;
-		cldm.row(i)(1) = pcloud[i].pt.y;
-		cldm.row(i)(2) = pcloud[i].pt.z;
+		cldm.row(i)(0) = pcloud[i].x;
+		cldm.row(i)(1) = pcloud[i].y;
+		cldm.row(i)(2) = pcloud[i].z;
 	}
 
 	cv::Mat_<double> mean;
@@ -344,7 +345,7 @@ bool TestCoplanarity(const vector<CloudPoint>& pcloud, vector<int>& planeIdx, ve
 	double p_to_plane_thresh = sqrt(pca.eigenvalues.at<double>(2));
 
 	for (int i=0; i<pcloud.size(); i++) {
-		Vec3d w = Vec3d(pcloud[i].pt) - x0;
+		Vec3d w = Vec3d(pcloud[i]) - x0;
 		double D = fabs(nrm.dot(w));
 
 		if(D < p_to_plane_thresh){
@@ -372,7 +373,7 @@ bool DecomposeHtoRandT(
 	TakeSVDOfE(H,svd_u,svd_vt,svd_w);
 
 	H = H/svd_w.at<double>(1); // normalize H with second singular val
-        std::cout << "normalized H: " << std::endl << Mat(H) << std::endl;	
+        //std::cout << "normalized H: " << std::endl << Mat(H) << std::endl;	
 
 	Mat_<double> HtH = H.t()*H;
 	
@@ -389,8 +390,8 @@ bool DecomposeHtoRandT(
 		H = -H;
 	
         eigen(HtH,eig_E,eig_V);
-	std::cout << "Sig: " << std::endl << Mat(eig_E) << std::endl;
-	std::cout << "V: " << std::endl << Mat(eig_V) << std::endl;
+	//std::cout << "Sig: " << std::endl << Mat(eig_E) << std::endl;
+	//std::cout << "V: " << std::endl << Mat(eig_V) << std::endl;
 	double sig1 = eig_E.at<double>(0,0);
 	double sig2 = eig_E.at<double>(0,1);
 	double sig3 = eig_E.at<double>(0,2);
@@ -400,8 +401,8 @@ bool DecomposeHtoRandT(
 	Mat u1 = (sqrt(1 - sig3*sig3)*eig_V.col(0) + sqrt(sig1*sig1 -1)*eig_V.col(2))/sqrt(sig1*sig1-sig3*sig3); 
 	Mat u2 = (sqrt(1 - sig3*sig3)*eig_V.col(0) - sqrt(sig1*sig1 -1)*eig_V.col(2))/sqrt(sig1*sig1-sig3*sig3); 
 	
-	std::cout << "u1: " << std::endl << Mat(u1) << std::endl;
-	std::cout << "u2: " << std::endl << Mat(u2) << std::endl;
+	//std::cout << "u1: " << std::endl << Mat(u1) << std::endl;
+	//std::cout << "u2: " << std::endl << Mat(u2) << std::endl;
 	Mat U1 = Mat::zeros(3,3,CV_32FC1);
 	Mat U2 = Mat::zeros(3,3,CV_32FC1);
 	Mat W1 = Mat::zeros(3,3,CV_32FC1);
@@ -423,10 +424,10 @@ bool DecomposeHtoRandT(
 	Mat(H*u2).copyTo(W2.col(1));
 	Mat(H*eig_V.col(1)).cross(H*u2).copyTo(W2.col(2));
 	
-	std::cout << "U1: " << std::endl << Mat(U1) << std::endl;
-	std::cout << "U2: " << std::endl << Mat(U2) << std::endl;
-	std::cout << "W1: " << std::endl << Mat(W1) << std::endl;
-	std::cout << "W2: " << std::endl << Mat(W2) << std::endl;
+	//std::cout << "U1: " << std::endl << Mat(U1) << std::endl;
+	//std::cout << "U2: " << std::endl << Mat(U2) << std::endl;
+	//std::cout << "W1: " << std::endl << Mat(W1) << std::endl;
+	//std::cout << "W2: " << std::endl << Mat(W2) << std::endl;
 	
 	R1 = Mat(W1*U1.t());
 	Mat N1 = Mat(eig_V.col(1)).cross(u1); //v2 x u1
@@ -483,14 +484,13 @@ bool DecomposeEtoRandT(
 	return true;
 }
 
-bool FindCameraMatricesWithH(const Mat& K, 
-						const Mat& Kinv, 
+bool FindCameraMatricesWithH(const Matx33d& K, 
+						const Matx33d& Kinv, 
 						const Mat& distcoeff,
 						const vector<KeyPoint>& imgpts1,
 						const vector<KeyPoint>& imgpts2,
 						vector<KeyPoint>& imgpts1_good,
 						vector<KeyPoint>& imgpts2_good,
-						Matx34d& P,
 						Matx34d& P1,
 						vector<DMatch>& matches
 						) 
@@ -521,8 +521,8 @@ bool FindCameraMatricesWithH(const Mat& K,
 			return false;
 		}	
 
-		Mat_<double> G = Kinv * H * K;
-		Mat_<double> G2 = Kinv * H2 * K;
+		Mat_<double> G = Mat(Kinv) * H * Mat(K);
+		Mat_<double> G2 = Mat(Kinv) * H2 * Mat(K);
 		Mat_<double> R1(3,3), R1_2(3,3);
                 Mat_<double> R2(3,3), R2_2(3,3);
                 Mat_<double> t1(1,3), t1_2(1,3);
@@ -533,6 +533,7 @@ bool FindCameraMatricesWithH(const Mat& K,
 		if(!DecomposeHtoRandT(G2, imgpts1_good2, imgpts2_good2, R1_2, R2_2, t1_2, t2_2))
 			return false;
 
+		/*
 		P1 = Matx34d(R1(0,0),   R1(0,1),        R1(0,2),        t1(0),
                              R1(1,0),   R1(1,1),        R1(1,2),        t1(1),
                              R1(2,0),   R1(2,1),        R1(2,2),        t1(2));
@@ -547,6 +548,7 @@ bool FindCameraMatricesWithH(const Mat& K,
                               R2_2(2,0),   R2_2(2,1),        R2_2(2,2),        t2_2(2));
 		std::cout << "Ps:" << std::endl << Mat(P1) << std::endl << Mat(P2) << std::endl;
 		std::cout << "Ps2:" << std::endl << Mat(P1_2) << std::endl << Mat(P2_2) << std::endl;
+		*/
 		vector<Mat_<double> > R1s, R2s, t1s, t2s;
 		t1s.push_back(t1);
 		t1s.push_back(t2);
@@ -578,7 +580,7 @@ bool FindCameraMatricesWithH(const Mat& K,
 		std::cout << "Min angle: " << minTheta*180.0/M_PI << std::endl;
 		if(minTheta*180./M_PI > 40)
 		{
-			cerr << "Two homogrpahy solution is not compatible" << std::endl;
+			cerr << "Two homography solution is not compatible" << std::endl;
 			return false;
 		}
 		Mat_<double> t_est = (mint1 + mint2)/2;
@@ -592,8 +594,8 @@ bool FindCameraMatricesWithH(const Mat& K,
 	}
 }
 
-bool FindCameraMatrices(const Mat& K, 
-						const Mat& Kinv, 
+bool FindCameraMatrices(const Matx33d& K, 
+						const Matx33d& Kinv, 
 						const Mat& distcoeff,
 						const vector<KeyPoint>& imgpts1,
 						const vector<KeyPoint>& imgpts2,
@@ -626,7 +628,7 @@ bool FindCameraMatrices(const Mat& K,
 		//}
 		
 		//Essential matrix: compute then extract cameras [R|t]
-		Mat_<double> E = K.t() * F * K; //according to HZ (9.12)
+		Mat_<double> E = Mat(K.t()) * F * Mat(K); //according to HZ (9.12)
 
 		//according to http://en.wikipedia.org/wiki/Essential_matrix#Properties_of_the_essential_matrix
 		if(fabsf(determinant(E)) > 1e-07) {
