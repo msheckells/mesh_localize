@@ -4,6 +4,7 @@
 #include <sstream>
 #include <stdlib.h>     
 #include <time.h> 
+#include <fstream>
 #include <Eigen/Dense>
 #include <unsupported/Eigen/MatrixFunctions>
 #include <cv_bridge/cv_bridge.h>
@@ -14,6 +15,10 @@
 #include "visualization_msgs/Marker.h"
 #include "visualization_msgs/MarkerArray.h"
 
+#include <pcl/sample_consensus/ransac.h>
+#include <pcl/sample_consensus/sac_model_plane.h>
+#include <pcl/filters/extract_indices.h>
+#include <pcl/io/pcd_io.h>
 //#define SHOW_MATCHES_ 
 
 MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
@@ -30,8 +35,18 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   distcoeff << -0.456758192707853, 0.197636354824418, 0.000543685887014507, 0.000401738655456894, 0;
 
   // TODO: make filepath param
-  std::string filename = "/home/matt/Documents/campus_doc.xml";
-  if(!LoadPhotoscanFile(filename, "data/GFTTKeypointsAndDescriptors1500.yml", true))
+  pc_filename = "bin/map.pcd";
+  mesh_filename = "bin/map.stl";
+  map_cloud = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
+
+  if(pcl::io::loadPCDFile<pcl::PointXYZ> (pc_filename, *map_cloud) == -1)
+  {
+    std::cout << "Could not open point cloud " << pc_filename << std::endl;
+    return;
+  }
+
+  photoscan_filename = "/home/matt/Documents/campus_doc.xml";
+  if(!LoadPhotoscanFile(photoscan_filename, "data/GFTTKeypointsAndDescriptors1500.bin", true))
   {
     return;
   }
@@ -76,14 +91,14 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
 {
   
   PublishMap();
-  if(currentKeyframe)
+  //if(currentKeyframe)
   {
     //Mat test = imread("/home/matt/uav_image_data/run11/frame0039.jpg", CV_LOAD_IMAGE_GRAYSCALE );
     //KeyframeContainer* kf = new KeyframeContainer(test, Eigen::Matrix4f());
-    KeyframeContainer* kf = currentKeyframe;
-    //KeyframeContainer* kf = keyframes[rand() % keyframes.size()];
+    //KeyframeContainer* kf = currentKeyframe;
+    KeyframeContainer* kf = keyframes[rand() % keyframes.size()];
 
-    std::vector< KeyframeMatch > matches = FindImageMatches(kf, 5, isLocalized); // Only do local search if position is known
+    std::vector< KeyframeMatch > matches = FindImageMatches(kf, 5);//, isLocalized); // Only do local search if position is known
     std::vector< KeyframeMatch > goodMatches;
     std::vector< Eigen::Vector3f > goodTVecs;
 
@@ -98,20 +113,27 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
         return;
       }
     }
-    ROS_INFO("Found matches");
+    //ROS_INFO("Found matches");
     std::vector<pcl::PointXYZ> pclCloud = GetPointCloudFromFrames(matches[1].kfc, matches[2].kfc);
     std::vector<Point3d> cvCloud = PCLToPoint3d(pclCloud);
     std::vector<int> planeIdx, nonplaneIdx;
-    ROS_INFO("Got point cloud");
+    //ROS_INFO("Got point cloud");
     if(pclCloud.size() > 5)
     {
-      PublishPointCloud(pclCloud);
+      std::vector<int> inliers = FindPlaneInPointCloud(pclCloud);
+      std::vector<pcl::PointXYZ> planeCloud;
+      for(unsigned int i = 0; i < inliers.size(); i++)
+      {
+        planeCloud.push_back(pclCloud[inliers[i]]);
+      }
+      PublishPointCloud(map_cloud);
+      //PublishPointCloud(pclCloud);
       TestCoplanarity(cvCloud, planeIdx, nonplaneIdx);
-      ROS_INFO("Tested for planes");
+      //ROS_INFO("Tested for planes");
     }
     else
     {
-      ROS_INFO("No point cloud available");
+      //ROS_INFO("No point cloud available");
     }
     PlotTf(matches[1].kfc->GetTf(), "match1");
     PlotTf(matches[2].kfc->GetTf(), "match2");
@@ -128,9 +150,9 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
 #endif
 
     Eigen::Matrix4f imgTf = FindImageTf(kf, matches, goodMatches, goodTVecs);
-    ROS_INFO("Found image tf");
     if(goodMatches.size() >= 2)
     {
+      ROS_INFO("Found image tf");
       isLocalized = true;
       numLocalizeRetrys = 0;
       currentPosition = imgTf.block<3,1>(0,3);
@@ -148,10 +170,11 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
 
     // For now just delete currentKeyframe, should probably add to keyframe list 
     // if tf estimate is good enough
-    delete currentKeyframe;
-    currentKeyframe = NULL;
+    //delete currentKeyframe;
+    //currentKeyframe = NULL;
   }
 }
+
 
 void MapLocalizer::PlotTf(Eigen::Matrix4f tf, std::string name)
 {
@@ -161,6 +184,13 @@ void MapLocalizer::PlotTf(Eigen::Matrix4f tf, std::string name)
                                       tf(1,0), tf(1,1), tf(1,2),
                                       tf(2,0), tf(2,1), tf(2,2)));
   br.sendTransform(tf::StampedTransform(tf_transform, ros::Time::now(), "markers", name));
+}
+
+void MapLocalizer::PublishPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pc)
+{
+  pc->header.frame_id = "/markers";
+  pc->header.stamp = ros::Time();
+  pointcloud_pub.publish(pc);
 }
 
 void MapLocalizer::PublishPointCloud(const std::vector<pcl::PointXYZ>& pc)
@@ -210,12 +240,12 @@ void MapLocalizer::PublishMap()
   marker.scale.x = 1.0;
   marker.scale.y = 1.0;
   marker.scale.z = 1.0;
-  marker.color.a = 1.0;
+  marker.color.a = 0.6;
   marker.color.r = 0.5;
   marker.color.g = 0.5;
   marker.color.b = 0.5;
   //only if using a MESH_RESOURCE marker type:
-  marker.mesh_resource = std::string("package://map_localize/") + std::string("bin/map.stl");
+  marker.mesh_resource = std::string("package://map_localize/") + mesh_filename;
 
   map_marker_pub.publish(marker);
 }
@@ -421,6 +451,27 @@ void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImg
 
 }
 
+std::vector<int> MapLocalizer::FindPlaneInPointCloud(const std::vector<pcl::PointXYZ>& pts)
+{
+  std::vector<int> inliers;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);//, plane;
+
+  cloud->points.resize(pts.size());
+  for(unsigned int i = 0; i < pts.size(); i++)
+  {
+    cloud->points[i] = pts[i];
+  }
+
+  pcl::SampleConsensusModelPlane<pcl::PointXYZ>::Ptr model_p (new pcl::SampleConsensusModelPlane<pcl::PointXYZ> (cloud));
+  pcl::RandomSampleConsensus<pcl::PointXYZ> ransac (model_p);
+  ransac.setDistanceThreshold (.01);
+  ransac.computeModel();
+  ransac.getInliers(inliers);
+
+  //pcl::copyPointCloud<pcl::PointXYZ>(*cloud, inliers, *plane);
+  return inliers;
+}
+
 std::vector<pcl::PointXYZ> MapLocalizer::GetPointCloudFromFrames(KeyframeContainer* kfc1, KeyframeContainer* kfc2)
 {
   std::vector<CloudPoint> pcCv;	
@@ -534,7 +585,8 @@ Eigen::Matrix4f MapLocalizer::StringToMatrix4f(std::string str)
 
 bool MapLocalizer::LoadPhotoscanFile(std::string filename, std::string desc_filename, bool load_descs)
 {
-  FileStorage fs;
+  //FileStorage fs;
+  std::ifstream desc_file;
   TiXmlDocument doc(filename);
 
   Matx33d Kcv(K(0,0), K(0,1), K(0,2),
@@ -553,8 +605,10 @@ bool MapLocalizer::LoadPhotoscanFile(std::string filename, std::string desc_file
   if(load_descs)
   {
     std::cout << "Loading keypoints and descriptors..." << std::flush;
-    fs = FileStorage(desc_filename, FileStorage::READ);
-    if(!fs.isOpened())
+    //fs = FileStorage(desc_filename, FileStorage::READ);
+    desc_file.open(desc_filename.c_str(), std::ifstream::binary);
+    //if(!fs.isOpened())
+    if(!desc_file.is_open())
     {
       std::cout << "Could not open descriptor file " << desc_filename << std::endl;
       return false;
@@ -592,6 +646,7 @@ bool MapLocalizer::LoadPhotoscanFile(std::string filename, std::string desc_file
 
         Mat img_undistort;
         undistort(img_in, img_undistort, Kcv, distcoeffcv);
+	img_in.release();
 
         Eigen::Matrix4f tf = StringToMatrix4f(tfStr);
         //std::cout << tf << std::endl;
@@ -599,7 +654,7 @@ bool MapLocalizer::LoadPhotoscanFile(std::string filename, std::string desc_file
         KeyframeContainer* kfc;
         if(load_descs && desc_filename != "")
         {
-          std::stringstream ss;
+          /*std::stringstream ss;
           ss << keyframes.size();
           
           Mat descriptors;
@@ -608,11 +663,33 @@ bool MapLocalizer::LoadPhotoscanFile(std::string filename, std::string desc_file
           fs[std::string("descriptors") + ss.str()] >> descriptors;
           FileNode kpn = fs[std::string("keypoints") + ss.str()];
           read(kpn, keypoints); 
-          kfc = new KeyframeContainer(img_undistort, tf, keypoints, descriptors);
+          */
+          std::vector<KeyPoint> keypoints;
+          int size;
+          desc_file.read((char*)&size, sizeof(int));
+          for(unsigned int i = 0; i < size; i++)
+          {
+            KeyPoint kp;
+            desc_file.read((char*)&kp, sizeof(KeyPoint));
+            keypoints.push_back(kp);
+          }
+          int rows;
+          int cols;
+          int elemSize;
+          desc_file.read((char*)&rows, sizeof(int));
+          desc_file.read((char*)&cols, sizeof(int));
+          desc_file.read((char*)&elemSize, sizeof(int));
+          
+          unsigned char* data = new unsigned char[rows*cols*elemSize];
+	  desc_file.read((char*)data, sizeof(unsigned char)*rows*cols*elemSize);
+          
+          Mat descriptors(Size(cols,rows), CV_32F, data);
+           
+          kfc = new KeyframeContainer(img_undistort, tf, K, keypoints, descriptors);
         }
         else
         {  
-          kfc = new KeyframeContainer(img_undistort, tf);
+          kfc = new KeyframeContainer(img_undistort, tf, K);
         }
         keyframes.push_back(kfc);    
       }
@@ -623,7 +700,9 @@ bool MapLocalizer::LoadPhotoscanFile(std::string filename, std::string desc_file
 
   if(load_descs)
   {
-    fs.release();
+    std::cout << "File storage released" << std::endl;
+    //fs.release();
+    desc_file.close();
   }
   else if(desc_filename != "")
   {
@@ -634,12 +713,44 @@ bool MapLocalizer::LoadPhotoscanFile(std::string filename, std::string desc_file
 
 bool MapLocalizer::WriteDescriptorsToFile(std::string filename)
 {
-  FileStorage fs(filename, FileStorage::WRITE);
-  
-  std::cout << "Saving keypoints and descriptors..." << std::flush;
-  if(!fs.isOpened())
+  std::ofstream file;
+  file.open(filename.c_str(), std::ios::out | std::ios::binary);
+
+  if(!file.is_open())
   {
     std::cout << "Could not open descriptor file " << filename << std::endl;
+    return false;
+  }
+
+  std::cout << "Saving keypoints and descriptors..." << std::flush;
+  for(unsigned int i = 0; i < keyframes.size(); i++)
+  {
+    int size = keyframes[i]->GetKeypoints().size();
+    file.write((char*)&size, sizeof(int));
+    for(unsigned int j = 0; j < size; j++)
+    {
+      KeyPoint kp = keyframes[i]->GetKeypoints()[j];
+      file.write((char*)&kp, sizeof(KeyPoint));
+    }
+    int rows = keyframes[i]->GetDescriptors().rows;
+    int cols = keyframes[i]->GetDescriptors().cols;
+    int elemSize = keyframes[i]->GetDescriptors().elemSize1();
+    unsigned char* data = keyframes[i]->GetDescriptors().data;
+   
+    file.write((char*)&rows, sizeof(int));
+    file.write((char*)&cols, sizeof(int));
+    file.write((char*)&elemSize, sizeof(int));
+    file.write((char*)data, sizeof(unsigned char)*rows*cols*elemSize);
+  }
+
+  file.close();
+  std::cout << "done" << std::endl;
+  return true;
+  /*
+  FileStorage fs(filename, FileStorage::WRITE);
+  
+  if(!fs.isOpened())
+  {
     return false;
   }
 
@@ -651,8 +762,8 @@ bool MapLocalizer::WriteDescriptorsToFile(std::string filename)
     write(fs, std::string("descriptors") + ss.str(), keyframes[i]->GetDescriptors());
   }
   fs.release();
-  std::cout << "done" << std::endl;
-
+  */
+  
   return true;
 }
 

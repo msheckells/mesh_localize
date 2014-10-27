@@ -13,7 +13,7 @@
 #include "pcl_ros/point_cloud.h"
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-
+#include <pcl/PolygonMesh.h>
 class MapLocalizer
 {
   struct KeyframePositionSorter
@@ -36,10 +36,14 @@ private:
   std::vector< KeyframeMatch > FindImageMatches(KeyframeContainer* img, int k, bool usePos = false);
   Eigen::Matrix4f FindImageTf(KeyframeContainer* img, std::vector< KeyframeMatch >, std::vector< KeyframeMatch >& goodMatches, std::vector< Eigen::Vector3f >& goodTVecs);
   std::vector<pcl::PointXYZ> GetPointCloudFromFrames(KeyframeContainer*, KeyframeContainer*);
+  std::vector<int> FindPlaneInPointCloud(const std::vector<pcl::PointXYZ>& pts);
+
+
   
   void PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImgTf, std::vector< KeyframeMatch > matches, std::vector< Eigen::Vector3f > tvecs);
   void PublishMap();
   void PublishPointCloud(const std::vector<pcl::PointXYZ>&);
+  void PublishPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pc);
   void PlotTf(Eigen::Matrix4f tf, std::string name);
 
   void spin(const ros::TimerEvent& e);
@@ -57,6 +61,11 @@ private:
   bool isLocalized;
   int numLocalizeRetrys;
 
+  pcl::PointCloud<pcl::PointXYZ>::Ptr map_cloud;
+
+  std::string pc_filename;
+  std::string mesh_filename;
+  std::string photoscan_filename;
 
   ros::NodeHandle nh;
   ros::NodeHandle nh_private;

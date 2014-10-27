@@ -1,0 +1,834 @@
+desc: (none)
+cmd: bin/map_localize_node
+time_unit: i
+#-----------
+snapshot=0
+#-----------
+time=0
+mem_heap_B=0
+mem_heap_extra_B=0
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=1
+#-----------
+time=3633654145
+mem_heap_B=191133484
+mem_heap_extra_B=1866628
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=2
+#-----------
+time=9183452756
+mem_heap_B=498656548
+mem_heap_extra_B=1885396
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=3
+#-----------
+time=14920914842
+mem_heap_B=816141996
+mem_heap_extra_B=1904772
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=4
+#-----------
+time=20486409019
+mem_heap_B=1121305548
+mem_heap_extra_B=1923396
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=5
+#-----------
+time=24103812903
+mem_heap_B=1320291060
+mem_heap_extra_B=1935540
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=6
+#-----------
+time=28521874858
+mem_heap_B=1560699116
+mem_heap_extra_B=1950212
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=7
+#-----------
+time=33221912210
+mem_heap_B=1817361588
+mem_heap_extra_B=1965876
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=8
+#-----------
+time=37916463871
+mem_heap_B=2075072732
+mem_heap_extra_B=1981604
+mem_stacks_B=0
+heap_tree=detailed
+n2: 2075072732 (heap allocation functions) malloc/new/new[], --alloc-fns, etc.
+ n2: 2048844044 0x7C6DC3F: cv::fastMalloc(unsigned long) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+  n2: 2047794248 0x7BF4F47: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+   n2: 1967570840 0x7BF5E40: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n1: 1960754472 0x7BF89F0: cvSeqPush (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+     n1: 1960754472 0x7C444E5: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+      n2: 1960754472 0x7C44C11: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+       n1: 1881579736 0x7C44C11: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+        n1: 1881579736 0x7C45547: cvOpenFileStorage (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+         n1: 1881579736 0x7C4A1E8: cv::FileStorage::open(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+          n1: 1881579736 0x7C4A348: cv::FileStorage::FileStorage(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+           n1: 1881579736 0x51A6A68: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:606)
+            n1: 1881579736 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+             n0: 1881579736 0x401369: main (map_localize_node.cpp:8)
+       n1: 79174736 0x7C45547: cvOpenFileStorage (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+        n1: 79174736 0x7C4A1E8: cv::FileStorage::open(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+         n1: 79174736 0x7C4A348: cv::FileStorage::FileStorage(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+          n1: 79174736 0x51A6A68: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:606)
+           n1: 79174736 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+            n0: 79174736 0x401369: main (map_localize_node.cpp:8)
+    n0: 6816368 in 1 place, below massif's threshold (01.00%)
+   n2: 80223408 0x7BF50F4: cvMemStorageAlloc (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n2: 79961240 0x7BF60ED: cvCreateSeq (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+     n1: 77339560 0x7C330A8: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+      n1: 77339560 0x7C444A6: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+       n1: 77339560 0x7C44C11: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+        n1: 77339560 0x7C45547: cvOpenFileStorage (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+         n1: 77339560 0x7C4A1E8: cv::FileStorage::open(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+          n1: 77339560 0x7C4A348: cv::FileStorage::FileStorage(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+           n1: 77339560 0x51A6A68: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:606)
+            n1: 77339560 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+             n0: 77339560 0x401369: main (map_localize_node.cpp:8)
+     n0: 2621680 in 1 place, below massif's threshold (01.00%)
+    n0: 262168 in 1 place, below massif's threshold (01.00%)
+  n0: 1049796 in 18 places, all below massif's threshold (01.00%)
+ n0: 26228688 in 357 places, all below massif's threshold (01.00%)
+#-----------
+snapshot=9
+#-----------
+time=44881513381
+mem_heap_B=2456002836
+mem_heap_extra_B=2004852
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=10
+#-----------
+time=50569935338
+mem_heap_B=2768244924
+mem_heap_extra_B=2023908
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=11
+#-----------
+time=53982431266
+mem_heap_B=2954384204
+mem_heap_extra_B=2035268
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=12
+#-----------
+time=58521590479
+mem_heap_B=3203181636
+mem_heap_extra_B=2050452
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=13
+#-----------
+time=63635310812
+mem_heap_B=3484750068
+mem_heap_extra_B=2067636
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=14
+#-----------
+time=68179246830
+mem_heap_B=3737742188
+mem_heap_extra_B=2083076
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=15
+#-----------
+time=72755043940
+mem_heap_B=3988636964
+mem_heap_extra_B=2098388
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=16
+#-----------
+time=77950789672
+mem_heap_B=4276497428
+mem_heap_extra_B=2115956
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=17
+#-----------
+time=81420495932
+mem_heap_B=4469190908
+mem_heap_extra_B=2127716
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=18
+#-----------
+time=85600841528
+mem_heap_B=4699374412
+mem_heap_extra_B=2141764
+mem_stacks_B=0
+heap_tree=detailed
+n2: 4699374412 (heap allocation functions) malloc/new/new[], --alloc-fns, etc.
+ n2: 4673145724 0x7C6DC3F: cv::fastMalloc(unsigned long) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+  n2: 4672095928 0x7BF4F47: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+   n2: 4483334968 0x7BF5E40: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n1: 4474945592 0x7BF89F0: cvSeqPush (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+     n1: 4474945592 0x7C444E5: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+      n2: 4474945592 0x7C44C11: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+       n1: 4293787504 0x7C44C11: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+        n1: 4293787504 0x7C45547: cvOpenFileStorage (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+         n1: 4293787504 0x7C4A1E8: cv::FileStorage::open(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+          n1: 4293787504 0x7C4A348: cv::FileStorage::FileStorage(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+           n1: 4293787504 0x51A6A68: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:606)
+            n1: 4293787504 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+             n0: 4293787504 0x401369: main (map_localize_node.cpp:8)
+       n1: 181158088 0x7C45547: cvOpenFileStorage (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+        n1: 181158088 0x7C4A1E8: cv::FileStorage::open(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+         n1: 181158088 0x7C4A348: cv::FileStorage::FileStorage(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+          n1: 181158088 0x51A6A68: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:606)
+           n1: 181158088 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+            n0: 181158088 0x401369: main (map_localize_node.cpp:8)
+    n0: 8389376 in 1 place, below massif's threshold (01.00%)
+   n2: 188760960 0x7BF50F4: cvMemStorageAlloc (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n2: 188498792 0x7BF60ED: cvCreateSeq (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+     n1: 183779768 0x7C330A8: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+      n1: 183779768 0x7C444A6: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+       n1: 183779768 0x7C44C11: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+        n1: 183779768 0x7C45547: cvOpenFileStorage (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+         n1: 183779768 0x7C4A1E8: cv::FileStorage::open(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+          n1: 183779768 0x7C4A348: cv::FileStorage::FileStorage(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+           n1: 183779768 0x51A6A68: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:606)
+            n1: 183779768 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+             n0: 183779768 0x401369: main (map_localize_node.cpp:8)
+     n0: 4719024 in 1 place, below massif's threshold (01.00%)
+    n0: 262168 in 1 place, below massif's threshold (01.00%)
+  n0: 1049796 in 18 places, all below massif's threshold (01.00%)
+ n0: 26228688 in 357 places, all below massif's threshold (01.00%)
+#-----------
+snapshot=19
+#-----------
+time=90058567649
+mem_heap_B=4775510904
+mem_heap_extra_B=2144760
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=20
+#-----------
+time=96789370145
+mem_heap_B=4893365183
+mem_heap_extra_B=2149209
+mem_stacks_B=0
+heap_tree=detailed
+n2: 4893365183 (heap allocation functions) malloc/new/new[], --alloc-fns, etc.
+ n3: 4860268656 0x7C6DC3F: cv::fastMalloc(unsigned long) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+  n2: 4672095928 0x7BF4F47: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+   n2: 4483334968 0x7BF5E40: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n1: 4474945592 0x7BF89F0: cvSeqPush (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+     n1: 4474945592 0x7C444E5: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+      n2: 4474945592 0x7C44C11: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+       n1: 4293787504 0x7C44C11: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+        n1: 4293787504 0x7C45547: cvOpenFileStorage (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+         n1: 4293787504 0x7C4A1E8: cv::FileStorage::open(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+          n1: 4293787504 0x7C4A348: cv::FileStorage::FileStorage(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+           n1: 4293787504 0x51A6A68: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:606)
+            n1: 4293787504 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+             n0: 4293787504 0x401369: main (map_localize_node.cpp:8)
+       n1: 181158088 0x7C45547: cvOpenFileStorage (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+        n1: 181158088 0x7C4A1E8: cv::FileStorage::open(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+         n1: 181158088 0x7C4A348: cv::FileStorage::FileStorage(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+          n1: 181158088 0x51A6A68: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:606)
+           n1: 181158088 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+            n0: 181158088 0x401369: main (map_localize_node.cpp:8)
+    n0: 8389376 in 1 place, below massif's threshold (01.00%)
+   n2: 188760960 0x7BF50F4: cvMemStorageAlloc (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n2: 188498792 0x7BF60ED: cvCreateSeq (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+     n1: 183779768 0x7C330A8: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+      n1: 183779768 0x7C444A6: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+       n1: 183779768 0x7C44C11: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+        n1: 183779768 0x7C45547: cvOpenFileStorage (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+         n1: 183779768 0x7C4A1E8: cv::FileStorage::open(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+          n1: 183779768 0x7C4A348: cv::FileStorage::FileStorage(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+           n1: 183779768 0x51A6A68: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:606)
+            n1: 183779768 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+             n0: 183779768 0x401369: main (map_localize_node.cpp:8)
+     n0: 4719024 in 1 place, below massif's threshold (01.00%)
+    n0: 262168 in 1 place, below massif's threshold (01.00%)
+  n3: 187403720 0x7CADE1E: cv::Mat::create(int, int const*, int) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+   n2: 125313716 0x7CAE35E: cv::_OutputArray::create(int, int, int, int, bool, int) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n2: 125313716 0x7C2A83C: cv::Mat::copyTo(cv::_OutputArray const&) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+     n1: 125313716 0x7C4932E: cv::read(cv::FileNode const&, cv::Mat&, cv::Mat const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+      n1: 125313716 0x51A7717: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (operations.hpp:3114)
+       n1: 125313716 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+        n0: 125313716 0x401369: main (map_localize_node.cpp:8)
+     n0: 0 in 2 places, all below massif's threshold (01.00%)
+    n0: 0 in 2 places, all below massif's threshold (01.00%)
+   n1: 61728948 0x7CAE719: cv::_OutputArray::create(cv::Size_<int>, int, int, bool, int) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n1: 61728948 0x871BC8C: cv::undistort(cv::_InputArray const&, cv::_OutputArray const&, cv::_InputArray const&, cv::_InputArray const&, cv::_InputArray const&) (in /opt/ros/fuerte/lib/libopencv_imgproc.so.2.4.2)
+     n1: 61728948 0x51A72A6: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:644)
+      n1: 61728948 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+       n0: 61728948 0x401369: main (map_localize_node.cpp:8)
+   n0: 361056 in 5 places, all below massif's threshold (01.00%)
+  n0: 769008 in 21 places, all below massif's threshold (01.00%)
+ n0: 33096527 in 367 places, all below massif's threshold (01.00%)
+#-----------
+snapshot=21
+#-----------
+time=101399234742
+mem_heap_B=4971863499
+mem_heap_extra_B=2152189
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=22
+#-----------
+time=107205047126
+mem_heap_B=5072086903
+mem_heap_extra_B=2155889
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=23
+#-----------
+time=111371626744
+mem_heap_B=5146223603
+mem_heap_extra_B=2158549
+mem_stacks_B=0
+heap_tree=detailed
+n2: 5146223603 (heap allocation functions) malloc/new/new[], --alloc-fns, etc.
+ n3: 5104010216 0x7C6DC3F: cv::fastMalloc(unsigned long) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+  n2: 4672095928 0x7BF4F47: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+   n2: 4483334968 0x7BF5E40: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n1: 4474945592 0x7BF89F0: cvSeqPush (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+     n1: 4474945592 0x7C444E5: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+      n2: 4474945592 0x7C44C11: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+       n1: 4293787504 0x7C44C11: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+        n1: 4293787504 0x7C45547: cvOpenFileStorage (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+         n1: 4293787504 0x7C4A1E8: cv::FileStorage::open(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+          n1: 4293787504 0x7C4A348: cv::FileStorage::FileStorage(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+           n1: 4293787504 0x51A6A68: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:606)
+            n1: 4293787504 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+             n0: 4293787504 0x401369: main (map_localize_node.cpp:8)
+       n1: 181158088 0x7C45547: cvOpenFileStorage (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+        n1: 181158088 0x7C4A1E8: cv::FileStorage::open(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+         n1: 181158088 0x7C4A348: cv::FileStorage::FileStorage(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+          n1: 181158088 0x51A6A68: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:606)
+           n1: 181158088 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+            n0: 181158088 0x401369: main (map_localize_node.cpp:8)
+    n0: 8389376 in 1 place, below massif's threshold (01.00%)
+   n2: 188760960 0x7BF50F4: cvMemStorageAlloc (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n2: 188498792 0x7BF60ED: cvCreateSeq (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+     n1: 183779768 0x7C330A8: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+      n1: 183779768 0x7C444A6: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+       n1: 183779768 0x7C44C11: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+        n1: 183779768 0x7C45547: cvOpenFileStorage (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+         n1: 183779768 0x7C4A1E8: cv::FileStorage::open(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+          n1: 183779768 0x7C4A348: cv::FileStorage::FileStorage(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+           n1: 183779768 0x51A6A68: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:606)
+            n1: 183779768 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+             n0: 183779768 0x401369: main (map_localize_node.cpp:8)
+     n0: 4719024 in 1 place, below massif's threshold (01.00%)
+    n0: 262168 in 1 place, below massif's threshold (01.00%)
+  n3: 431145280 0x7CADE1E: cv::Mat::create(int, int const*, int) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+   n2: 290720880 0x7CAE35E: cv::_OutputArray::create(int, int, int, int, bool, int) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n2: 290720880 0x7C2A83C: cv::Mat::copyTo(cv::_OutputArray const&) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+     n1: 290720880 0x7C4932E: cv::read(cv::FileNode const&, cv::Mat&, cv::Mat const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+      n1: 290720880 0x51A7717: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (operations.hpp:3114)
+       n1: 290720880 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+        n0: 290720880 0x401369: main (map_localize_node.cpp:8)
+     n0: 0 in 2 places, all below massif's threshold (01.00%)
+    n0: 0 in 2 places, all below massif's threshold (01.00%)
+   n1: 140063344 0x7CAE719: cv::_OutputArray::create(cv::Size_<int>, int, int, bool, int) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n1: 140063344 0x871BC8C: cv::undistort(cv::_InputArray const&, cv::_OutputArray const&, cv::_InputArray const&, cv::_InputArray const&, cv::_InputArray const&) (in /opt/ros/fuerte/lib/libopencv_imgproc.so.2.4.2)
+     n1: 140063344 0x51A72A6: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:644)
+      n1: 140063344 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+       n0: 140063344 0x401369: main (map_localize_node.cpp:8)
+   n0: 361056 in 5 places, all below massif's threshold (01.00%)
+  n0: 769008 in 21 places, all below massif's threshold (01.00%)
+ n0: 42213387 in 367 places, all below massif's threshold (01.00%)
+#-----------
+snapshot=24
+#-----------
+time=115603487555
+mem_heap_B=5219616919
+mem_heap_extra_B=2161297
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=25
+#-----------
+time=121712840862
+mem_heap_B=5325717562
+mem_heap_extra_B=2165230
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=26
+#-----------
+time=126165324524
+mem_heap_B=5400689852
+mem_heap_extra_B=2168204
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=27
+#-----------
+time=133256009861
+mem_heap_B=5523513594
+mem_heap_extra_B=2172830
+mem_stacks_B=0
+heap_tree=peak
+n2: 5523513594 (heap allocation functions) malloc/new/new[], --alloc-fns, etc.
+ n3: 5467828816 0x7C6DC3F: cv::fastMalloc(unsigned long) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+  n2: 4672095928 0x7BF4F47: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+   n2: 4483334968 0x7BF5E40: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n1: 4474945592 0x7BF89F0: cvSeqPush (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+     n1: 4474945592 0x7C444E5: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+      n2: 4474945592 0x7C44C11: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+       n1: 4293787504 0x7C44C11: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+        n1: 4293787504 0x7C45547: cvOpenFileStorage (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+         n1: 4293787504 0x7C4A1E8: cv::FileStorage::open(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+          n1: 4293787504 0x7C4A348: cv::FileStorage::FileStorage(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+           n1: 4293787504 0x51A6A68: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:606)
+            n1: 4293787504 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+             n0: 4293787504 0x401369: main (map_localize_node.cpp:8)
+       n1: 181158088 0x7C45547: cvOpenFileStorage (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+        n1: 181158088 0x7C4A1E8: cv::FileStorage::open(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+         n1: 181158088 0x7C4A348: cv::FileStorage::FileStorage(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+          n1: 181158088 0x51A6A68: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:606)
+           n1: 181158088 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+            n0: 181158088 0x401369: main (map_localize_node.cpp:8)
+    n0: 8389376 in 1 place, below massif's threshold (01.00%)
+   n2: 188760960 0x7BF50F4: cvMemStorageAlloc (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n2: 188498792 0x7BF60ED: cvCreateSeq (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+     n1: 183779768 0x7C330A8: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+      n1: 183779768 0x7C444A6: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+       n1: 183779768 0x7C44C11: ??? (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+        n1: 183779768 0x7C45547: cvOpenFileStorage (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+         n1: 183779768 0x7C4A1E8: cv::FileStorage::open(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+          n1: 183779768 0x7C4A348: cv::FileStorage::FileStorage(std::string const&, int, std::string const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+           n1: 183779768 0x51A6A68: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:606)
+            n1: 183779768 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+             n0: 183779768 0x401369: main (map_localize_node.cpp:8)
+     n0: 4719024 in 1 place, below massif's threshold (01.00%)
+    n0: 262168 in 1 place, below massif's threshold (01.00%)
+  n3: 794963880 0x7CADE1E: cv::Mat::create(int, int const*, int) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+   n2: 535052452 0x7CAE35E: cv::_OutputArray::create(int, int, int, int, bool, int) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n2: 535052452 0x7C2A83C: cv::Mat::copyTo(cv::_OutputArray const&) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+     n1: 535052452 0x7C4932E: cv::read(cv::FileNode const&, cv::Mat&, cv::Mat const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+      n1: 535052452 0x51A7717: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (operations.hpp:3114)
+       n1: 535052452 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+        n0: 535052452 0x401369: main (map_localize_node.cpp:8)
+     n0: 0 in 2 places, all below massif's threshold (01.00%)
+    n0: 0 in 2 places, all below massif's threshold (01.00%)
+   n1: 259550372 0x7CAE719: cv::_OutputArray::create(cv::Size_<int>, int, int, bool, int) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n1: 259550372 0x871BC8C: cv::undistort(cv::_InputArray const&, cv::_OutputArray const&, cv::_InputArray const&, cv::_InputArray const&, cv::_InputArray const&) (in /opt/ros/fuerte/lib/libopencv_imgproc.so.2.4.2)
+     n1: 259550372 0x51A72A6: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:644)
+      n1: 259550372 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+       n0: 259550372 0x401369: main (map_localize_node.cpp:8)
+   n0: 361056 in 5 places, all below massif's threshold (01.00%)
+  n0: 769008 in 21 places, all below massif's threshold (01.00%)
+ n0: 55684778 in 367 places, all below massif's threshold (01.00%)
+#-----------
+snapshot=28
+#-----------
+time=140630483148
+mem_heap_B=860681094
+mem_heap_extra_B=67258
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=29
+#-----------
+time=146775883163
+mem_heap_B=862298454
+mem_heap_extra_B=69450
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=30
+#-----------
+time=151690813224
+mem_heap_B=863571990
+mem_heap_extra_B=71394
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=31
+#-----------
+time=154150472771
+mem_heap_B=864382514
+mem_heap_extra_B=72318
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=32
+#-----------
+time=159065614301
+mem_heap_B=865996650
+mem_heap_extra_B=74102
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=33
+#-----------
+time=162751912389
+mem_heap_B=866961882
+mem_heap_extra_B=75462
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=34
+#-----------
+time=168172851394
+mem_heap_B=868449706
+mem_heap_extra_B=77350
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=35
+#-----------
+time=173374462336
+mem_heap_B=869878810
+mem_heap_extra_B=79286
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=36
+#-----------
+time=180309939584
+mem_heap_B=871755866
+mem_heap_extra_B=81702
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=37
+#-----------
+time=183778397272
+mem_heap_B=872731002
+mem_heap_extra_B=83038
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=38
+#-----------
+time=188980020034
+mem_heap_B=874091298
+mem_heap_extra_B=84958
+mem_stacks_B=0
+heap_tree=detailed
+n4: 874091298 (heap allocation functions) malloc/new/new[], --alloc-fns, etc.
+ n2: 812305564 0x7C6DC3F: cv::fastMalloc(unsigned long) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+  n3: 812305060 0x7CADE1E: cv::Mat::create(int, int const*, int) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+   n2: 546547784 0x7CAE35E: cv::_OutputArray::create(int, int, int, int, bool, int) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n2: 546547784 0x7C2A83C: cv::Mat::copyTo(cv::_OutputArray const&) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+     n1: 546547784 0x7C4932E: cv::read(cv::FileNode const&, cv::Mat&, cv::Mat const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+      n1: 546547784 0x51A7717: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (operations.hpp:3114)
+       n1: 546547784 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+        n0: 546547784 0x401369: main (map_localize_node.cpp:8)
+     n0: 0 in 2 places, all below massif's threshold (01.00%)
+    n0: 0 in 2 places, all below massif's threshold (01.00%)
+   n1: 264965192 0x7CAE719: cv::_OutputArray::create(cv::Size_<int>, int, int, bool, int) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n1: 264965192 0x871BC8C: cv::undistort(cv::_InputArray const&, cv::_OutputArray const&, cv::_InputArray const&, cv::_InputArray const&, cv::_InputArray const&) (in /opt/ros/fuerte/lib/libopencv_imgproc.so.2.4.2)
+     n1: 264965192 0x51A72A6: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:644)
+      n1: 264965192 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+       n0: 264965192 0x401369: main (map_localize_node.cpp:8)
+   n0: 792084 in 8 places, all below massif's threshold (01.00%)
+  n0: 504 in 26 places, all below massif's threshold (01.00%)
+ n1: 29888208 0x519F565: KeyframeContainer::KeyframeContainer(cv::Mat, Eigen::Matrix<float, 4, 4, 0, 4, 4>, Eigen::Matrix<float, 3, 3, 0, 3, 3>, std::vector<cv::KeyPoint, std::allocator<cv::KeyPoint> >&, cv::Mat&, int) (new_allocator.h:92)
+  n1: 29888208 0x51A7A4B: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:661)
+   n1: 29888208 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+    n0: 29888208 0x401369: main (map_localize_node.cpp:8)
+ n1: 16074304 0x51BD32E: std::vector<pcl::PointXYZ, Eigen::aligned_allocator_indirection<pcl::PointXYZ> >::_M_fill_insert(__gnu_cxx::__normal_iterator<pcl::PointXYZ*, std::vector<pcl::PointXYZ, Eigen::aligned_allocator_indirection<pcl::PointXYZ> > >, unsigned long, pcl::PointXYZ const&) (Memory.h:215)
+  n1: 16074304 0x51BD540: void pcl::fromROSMsg<pcl::PointXYZ>(sensor_msgs::PointCloud2_<std::allocator<void> > const&, pcl::PointCloud<pcl::PointXYZ>&, std::vector<pcl::detail::FieldMapping, std::allocator<pcl::detail::FieldMapping> > const&) (stl_vector.h:944)
+   n1: 16074304 0x51A9CD1: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (conversions.h:230)
+    n0: 16074304 0x401369: main (map_localize_node.cpp:8)
+ n0: 15823222 in 458 places, all below massif's threshold (01.00%)
+#-----------
+snapshot=39
+#-----------
+time=195915529825
+mem_heap_B=874862586
+mem_heap_extra_B=99598
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=40
+#-----------
+time=202850998318
+mem_heap_B=876714634
+mem_heap_extra_B=102094
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=41
+#-----------
+time=208052629517
+mem_heap_B=879199786
+mem_heap_extra_B=91798
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=42
+#-----------
+time=213254253974
+mem_heap_B=880612682
+mem_heap_extra_B=93574
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=43
+#-----------
+time=220189788913
+mem_heap_B=881395762
+mem_heap_extra_B=108374
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=44
+#-----------
+time=223659280028
+mem_heap_B=883181014
+mem_heap_extra_B=97066
+mem_stacks_B=0
+heap_tree=detailed
+n5: 883181014 (heap allocation functions) malloc/new/new[], --alloc-fns, etc.
+ n2: 812281480 0x7C6DC3F: cv::fastMalloc(unsigned long) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+  n3: 812281004 0x7CADE1E: cv::Mat::create(int, int const*, int) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+   n2: 546547784 0x7CAE35E: cv::_OutputArray::create(int, int, int, int, bool, int) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n2: 546547784 0x7C2A83C: cv::Mat::copyTo(cv::_OutputArray const&) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+     n1: 546547784 0x7C4932E: cv::read(cv::FileNode const&, cv::Mat&, cv::Mat const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+      n1: 546547784 0x51A7717: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (operations.hpp:3114)
+       n1: 546547784 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+        n0: 546547784 0x401369: main (map_localize_node.cpp:8)
+     n0: 0 in 2 places, all below massif's threshold (01.00%)
+    n0: 0 in 2 places, all below massif's threshold (01.00%)
+   n1: 264965192 0x7CAE719: cv::_OutputArray::create(cv::Size_<int>, int, int, bool, int) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n1: 264965192 0x871BC8C: cv::undistort(cv::_InputArray const&, cv::_OutputArray const&, cv::_InputArray const&, cv::_InputArray const&, cv::_InputArray const&) (in /opt/ros/fuerte/lib/libopencv_imgproc.so.2.4.2)
+     n1: 264965192 0x51A72A6: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:644)
+      n1: 264965192 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+       n0: 264965192 0x401369: main (map_localize_node.cpp:8)
+   n0: 768028 in 8 places, all below massif's threshold (01.00%)
+  n0: 476 in 26 places, all below massif's threshold (01.00%)
+ n1: 29888208 0x519F565: KeyframeContainer::KeyframeContainer(cv::Mat, Eigen::Matrix<float, 4, 4, 0, 4, 4>, Eigen::Matrix<float, 3, 3, 0, 3, 3>, std::vector<cv::KeyPoint, std::allocator<cv::KeyPoint> >&, cv::Mat&, int) (new_allocator.h:92)
+  n1: 29888208 0x51A7A4B: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:661)
+   n1: 29888208 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+    n0: 29888208 0x401369: main (map_localize_node.cpp:8)
+ n1: 16074304 0x51BD32E: std::vector<pcl::PointXYZ, Eigen::aligned_allocator_indirection<pcl::PointXYZ> >::_M_fill_insert(__gnu_cxx::__normal_iterator<pcl::PointXYZ*, std::vector<pcl::PointXYZ, Eigen::aligned_allocator_indirection<pcl::PointXYZ> > >, unsigned long, pcl::PointXYZ const&) (Memory.h:215)
+  n1: 16074304 0x51BD540: void pcl::fromROSMsg<pcl::PointXYZ>(sensor_msgs::PointCloud2_<std::allocator<void> > const&, pcl::PointCloud<pcl::PointXYZ>&, std::vector<pcl::detail::FieldMapping, std::allocator<pcl::detail::FieldMapping> > const&) (stl_vector.h:944)
+   n1: 16074304 0x51A9CD1: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (conversions.h:230)
+    n0: 16074304 0x401369: main (map_localize_node.cpp:8)
+ n0: 13681022 in 457 places, all below massif's threshold (01.00%)
+ n1: 11256000 0x51B74BE: KeyframeMatch::KeyframeMatch(KeyframeMatch const&) (new_allocator.h:92)
+  n0: 11256000 in 3 places, all below massif's threshold (01.00%)
+#-----------
+snapshot=45
+#-----------
+time=230597002500
+mem_heap_B=885212106
+mem_heap_extra_B=99782
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=46
+#-----------
+time=235800073920
+mem_heap_B=886395510
+mem_heap_extra_B=101178
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=47
+#-----------
+time=241001978717
+mem_heap_B=888007162
+mem_heap_extra_B=103534
+mem_stacks_B=0
+heap_tree=detailed
+n5: 888007162 (heap allocation functions) malloc/new/new[], --alloc-fns, etc.
+ n2: 812081288 0x7C6DC3F: cv::fastMalloc(unsigned long) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+  n3: 812080812 0x7CADE1E: cv::Mat::create(int, int const*, int) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+   n2: 546547784 0x7CAE35E: cv::_OutputArray::create(int, int, int, int, bool, int) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n2: 546547784 0x7C2A83C: cv::Mat::copyTo(cv::_OutputArray const&) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+     n1: 546547784 0x7C4932E: cv::read(cv::FileNode const&, cv::Mat&, cv::Mat const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+      n1: 546547784 0x51A7717: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (operations.hpp:3114)
+       n1: 546547784 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+        n0: 546547784 0x401369: main (map_localize_node.cpp:8)
+     n0: 0 in 2 places, all below massif's threshold (01.00%)
+    n0: 0 in 2 places, all below massif's threshold (01.00%)
+   n1: 264965192 0x7CAE719: cv::_OutputArray::create(cv::Size_<int>, int, int, bool, int) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n1: 264965192 0x871BC8C: cv::undistort(cv::_InputArray const&, cv::_OutputArray const&, cv::_InputArray const&, cv::_InputArray const&, cv::_InputArray const&) (in /opt/ros/fuerte/lib/libopencv_imgproc.so.2.4.2)
+     n1: 264965192 0x51A72A6: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:644)
+      n1: 264965192 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+       n0: 264965192 0x401369: main (map_localize_node.cpp:8)
+   n0: 567836 in 8 places, all below massif's threshold (01.00%)
+  n0: 476 in 26 places, all below massif's threshold (01.00%)
+ n1: 29888208 0x519F565: KeyframeContainer::KeyframeContainer(cv::Mat, Eigen::Matrix<float, 4, 4, 0, 4, 4>, Eigen::Matrix<float, 3, 3, 0, 3, 3>, std::vector<cv::KeyPoint, std::allocator<cv::KeyPoint> >&, cv::Mat&, int) (new_allocator.h:92)
+  n1: 29888208 0x51A7A4B: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:661)
+   n1: 29888208 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+    n0: 29888208 0x401369: main (map_localize_node.cpp:8)
+ n0: 16451362 in 457 places, all below massif's threshold (01.00%)
+ n1: 16074304 0x51BD32E: std::vector<pcl::PointXYZ, Eigen::aligned_allocator_indirection<pcl::PointXYZ> >::_M_fill_insert(__gnu_cxx::__normal_iterator<pcl::PointXYZ*, std::vector<pcl::PointXYZ, Eigen::aligned_allocator_indirection<pcl::PointXYZ> > >, unsigned long, pcl::PointXYZ const&) (Memory.h:215)
+  n1: 16074304 0x51BD540: void pcl::fromROSMsg<pcl::PointXYZ>(sensor_msgs::PointCloud2_<std::allocator<void> > const&, pcl::PointCloud<pcl::PointXYZ>&, std::vector<pcl::detail::FieldMapping, std::allocator<pcl::detail::FieldMapping> > const&) (stl_vector.h:944)
+   n1: 16074304 0x51A9CD1: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (conversions.h:230)
+    n0: 16074304 0x401369: main (map_localize_node.cpp:8)
+ n2: 13512000 0x51B74BE: KeyframeMatch::KeyframeMatch(KeyframeMatch const&) (new_allocator.h:92)
+  n1: 12288000 0x51A1E6E: _ZSt22__uninitialized_move_aIP13KeyframeMatchS1_SaIS0_EET0_T_S4_S3_RT1_.isra.1328 (stl_construct.h:84)
+   n1: 12288000 0x51BC517: std::vector<KeyframeMatch, std::allocator<KeyframeMatch> >::_M_insert_aux(__gnu_cxx::__normal_iterator<KeyframeMatch*, std::vector<KeyframeMatch, std::allocator<KeyframeMatch> > >, KeyframeMatch const&) (vector.tcc:343)
+    n1: 12288000 0x51A92E8: MapLocalizer::FindImageMatches(KeyframeContainer*, int, bool) (stl_vector.h:834)
+     n1: 12288000 0x51ADF60: MapLocalizer::spin(ros::TimerEvent const&) (MapLocalizer.cpp:100)
+      n1: 12288000 0x4EC5832: ros::TimerManager<ros::Time, ros::Duration, ros::TimerEvent>::TimerQueueCallback::call() (in /opt/ros/fuerte/lib/libroscpp.so)
+       n1: 12288000 0x4EDFC07: ros::CallbackQueue::callOneCB(ros::CallbackQueue::TLS*) (in /opt/ros/fuerte/lib/libroscpp.so)
+        n1: 12288000 0x4EE16A9: ros::CallbackQueue::callAvailable(ros::WallDuration) (in /opt/ros/fuerte/lib/libroscpp.so)
+         n1: 12288000 0x4F30A26: ros::SingleThreadedSpinner::spin(ros::CallbackQueue*) (in /opt/ros/fuerte/lib/libroscpp.so)
+          n1: 12288000 0x4F15A29: ros::spin() (in /opt/ros/fuerte/lib/libroscpp.so)
+           n0: 12288000 0x401388: main (map_localize_node.cpp:9)
+  n0: 1224000 in 2 places, all below massif's threshold (01.00%)
+#-----------
+snapshot=48
+#-----------
+time=247937485244
+mem_heap_B=890493071
+mem_heap_extra_B=105129
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=49
+#-----------
+time=253139111775
+mem_heap_B=891840405
+mem_heap_extra_B=101411
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=50
+#-----------
+time=255599406203
+mem_heap_B=892417361
+mem_heap_extra_B=102151
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=51
+#-----------
+time=258059547392
+mem_heap_B=893190585
+mem_heap_extra_B=103255
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=52
+#-----------
+time=260519211610
+mem_heap_B=892844909
+mem_heap_extra_B=116419
+mem_stacks_B=0
+heap_tree=detailed
+n5: 892844909 (heap allocation functions) malloc/new/new[], --alloc-fns, etc.
+ n2: 811513424 0x7C6DC3F: cv::fastMalloc(unsigned long) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+  n3: 811512976 0x7CADE1E: cv::Mat::create(int, int const*, int) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+   n2: 546547784 0x7CAE35E: cv::_OutputArray::create(int, int, int, int, bool, int) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n2: 546547784 0x7C2A83C: cv::Mat::copyTo(cv::_OutputArray const&) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+     n1: 546547784 0x7C4932E: cv::read(cv::FileNode const&, cv::Mat&, cv::Mat const&) (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+      n1: 546547784 0x51A7717: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (operations.hpp:3114)
+       n1: 546547784 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+        n0: 546547784 0x401369: main (map_localize_node.cpp:8)
+     n0: 0 in 2 places, all below massif's threshold (01.00%)
+    n0: 0 in 2 places, all below massif's threshold (01.00%)
+   n1: 264965192 0x7CAE719: cv::_OutputArray::create(cv::Size_<int>, int, int, bool, int) const (in /opt/ros/fuerte/lib/libopencv_core.so.2.4.2)
+    n1: 264965192 0x871BC8C: cv::undistort(cv::_InputArray const&, cv::_OutputArray const&, cv::_InputArray const&, cv::_InputArray const&, cv::_InputArray const&) (in /opt/ros/fuerte/lib/libopencv_imgproc.so.2.4.2)
+     n1: 264965192 0x51A72A6: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:644)
+      n1: 264965192 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+       n0: 264965192 0x401369: main (map_localize_node.cpp:8)
+   n0: 0 in 8 places, all below massif's threshold (01.00%)
+  n0: 448 in 26 places, all below massif's threshold (01.00%)
+ n1: 29888208 0x519F565: KeyframeContainer::KeyframeContainer(cv::Mat, Eigen::Matrix<float, 4, 4, 0, 4, 4>, Eigen::Matrix<float, 3, 3, 0, 3, 3>, std::vector<cv::KeyPoint, std::allocator<cv::KeyPoint> >&, cv::Mat&, int) (new_allocator.h:92)
+  n1: 29888208 0x51A7A4B: MapLocalizer::LoadPhotoscanFile(std::string, std::string, bool) (MapLocalizer.cpp:661)
+   n1: 29888208 0x51A9D8E: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (MapLocalizer.cpp:48)
+    n0: 29888208 0x401369: main (map_localize_node.cpp:8)
+ n0: 19504973 in 470 places, all below massif's threshold (01.00%)
+ n1: 16074304 0x51BD32E: std::vector<pcl::PointXYZ, Eigen::aligned_allocator_indirection<pcl::PointXYZ> >::_M_fill_insert(__gnu_cxx::__normal_iterator<pcl::PointXYZ*, std::vector<pcl::PointXYZ, Eigen::aligned_allocator_indirection<pcl::PointXYZ> > >, unsigned long, pcl::PointXYZ const&) (Memory.h:215)
+  n1: 16074304 0x51BD540: void pcl::fromROSMsg<pcl::PointXYZ>(sensor_msgs::PointCloud2_<std::allocator<void> > const&, pcl::PointCloud<pcl::PointXYZ>&, std::vector<pcl::detail::FieldMapping, std::allocator<pcl::detail::FieldMapping> > const&) (stl_vector.h:944)
+   n1: 16074304 0x51A9CD1: MapLocalizer::MapLocalizer(ros::NodeHandle, ros::NodeHandle) (conversions.h:230)
+    n0: 16074304 0x401369: main (map_localize_node.cpp:8)
+ n2: 15864000 0x51B74BE: KeyframeMatch::KeyframeMatch(KeyframeMatch const&) (new_allocator.h:92)
+  n1: 12288000 0x51A1E6E: _ZSt22__uninitialized_move_aIP13KeyframeMatchS1_SaIS0_EET0_T_S4_S3_RT1_.isra.1328 (stl_construct.h:84)
+   n1: 12288000 0x51BC517: std::vector<KeyframeMatch, std::allocator<KeyframeMatch> >::_M_insert_aux(__gnu_cxx::__normal_iterator<KeyframeMatch*, std::vector<KeyframeMatch, std::allocator<KeyframeMatch> > >, KeyframeMatch const&) (vector.tcc:343)
+    n1: 12288000 0x51A92E8: MapLocalizer::FindImageMatches(KeyframeContainer*, int, bool) (stl_vector.h:834)
+     n1: 12288000 0x51ADF60: MapLocalizer::spin(ros::TimerEvent const&) (MapLocalizer.cpp:100)
+      n1: 12288000 0x4EC5832: ros::TimerManager<ros::Time, ros::Duration, ros::TimerEvent>::TimerQueueCallback::call() (in /opt/ros/fuerte/lib/libroscpp.so)
+       n1: 12288000 0x4EDFC07: ros::CallbackQueue::callOneCB(ros::CallbackQueue::TLS*) (in /opt/ros/fuerte/lib/libroscpp.so)
+        n1: 12288000 0x4EE16A9: ros::CallbackQueue::callAvailable(ros::WallDuration) (in /opt/ros/fuerte/lib/libroscpp.so)
+         n1: 12288000 0x4F30A26: ros::SingleThreadedSpinner::spin(ros::CallbackQueue*) (in /opt/ros/fuerte/lib/libroscpp.so)
+          n1: 12288000 0x4F15A29: ros::spin() (in /opt/ros/fuerte/lib/libroscpp.so)
+           n0: 12288000 0x401388: main (map_localize_node.cpp:9)
+  n0: 3576000 in 2 places, all below massif's threshold (01.00%)
+#-----------
+snapshot=53
+#-----------
+time=262978872675
+mem_heap_B=894602549
+mem_heap_extra_B=105043
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=54
+#-----------
+time=265439281229
+mem_heap_B=895046393
+mem_heap_extra_B=105551
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=55
+#-----------
+time=267899839245
+mem_heap_B=895603673
+mem_heap_extra_B=106343
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=56
+#-----------
+time=270359501781
+mem_heap_B=896672877
+mem_heap_extra_B=107675
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=57
+#-----------
+time=272819831055
+mem_heap_B=897031553
+mem_heap_extra_B=108207
+mem_stacks_B=0
+heap_tree=empty
+#-----------
+snapshot=58
+#-----------
+time=275279491379
+mem_heap_B=859704440
+mem_heap_extra_B=58744
+mem_stacks_B=0
+heap_tree=empty

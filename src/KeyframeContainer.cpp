@@ -1,7 +1,8 @@
 #include "map_localize/KeyframeContainer.h"
 
-KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, int minHessian) :
+KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, Eigen::Matrix3f K, int minHessian) :
   tf(tf),
+  K(K),
   img(image)
 {
   //SurfFeatureDetector detector(minHessian);
@@ -14,8 +15,9 @@ KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, int minHessi
   extractor.compute(img, keypoints, descriptors);
 }
 
-KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, std::vector<KeyPoint>& keypoints, Mat& descriptors, int minHessian) :
+KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, Eigen::Matrix3f K, std::vector<KeyPoint>& keypoints, Mat& descriptors, int minHessian) :
   tf(tf),
+  K(K),
   img(image),
   keypoints(keypoints),
   descriptors(descriptors)
@@ -41,3 +43,9 @@ Eigen::Matrix4f KeyframeContainer::GetTf()
 {
   return tf;
 }
+
+Eigen::Matrix3f KeyframeContainer::GetK()
+{
+  return K;
+}
+
