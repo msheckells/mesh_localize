@@ -9,6 +9,7 @@
 
 #include "KeyframeContainer.h"
 #include "KeyframeMatch.h"
+#include "MapFeatures.h"
 
 #include "pcl_ros/point_cloud.h"
 #include <pcl/point_cloud.h>
@@ -34,13 +35,15 @@ public:
 
 private:
   std::vector< KeyframeMatch > FindImageMatches(KeyframeContainer* img, int k, bool usePos = false);
-  Eigen::Matrix4f FindImageTf(KeyframeContainer* img, std::vector< KeyframeMatch >, std::vector< KeyframeMatch >& goodMatches, std::vector< Eigen::Vector3f >& goodTVecs);
+  Eigen::Matrix4f FindImageTfSfm(KeyframeContainer* img, std::vector< KeyframeMatch >, std::vector< KeyframeMatch >& goodMatches, std::vector< Eigen::Vector3f >& goodTVecs);
+  Eigen::Matrix4f FindImageTfPnp(KeyframeContainer* kcv, const MapFeatures& mf);
   std::vector<pcl::PointXYZ> GetPointCloudFromFrames(KeyframeContainer*, KeyframeContainer*);
   std::vector<int> FindPlaneInPointCloud(const std::vector<pcl::PointXYZ>& pts);
 
 
   
-  void PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImgTf, std::vector< KeyframeMatch > matches, std::vector< Eigen::Vector3f > tvecs);
+  void PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImgTf);
+  void PublishSfmMatchViz(std::vector<KeyframeMatch > matches, std::vector< Eigen::Vector3f > tvecs);
   void PublishMap();
   void PublishPointCloud(const std::vector<pcl::PointXYZ>&);
   void PublishPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pc);
@@ -62,6 +65,7 @@ private:
   int numLocalizeRetrys;
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr map_cloud;
+  MapFeatures map_features;
 
   std::string pc_filename;
   std::string mesh_filename;
@@ -85,6 +89,8 @@ private:
 
   Eigen::Matrix3f K;
   Eigen::VectorXf distcoeff;
+  Matx33d Kcv;
+  Mat distcoeffcv;
 };
 
 #endif

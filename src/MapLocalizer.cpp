@@ -34,6 +34,11 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   distcoeff = Eigen::VectorXf(5);
   distcoeff << -0.456758192707853, 0.197636354824418, 0.000543685887014507, 0.000401738655456894, 0;
 
+  Kcv = Matx33d(K(0,0), K(0,1), K(0,2),
+              K(1,0), K(1,1), K(1,2),
+              K(2,0), K(2,1), K(2,2)); 
+  distcoeffcv = (Mat_<double>(5,1) << distcoeff(0), distcoeff(1), distcoeff(2), distcoeff(3), distcoeff(4)); 
+
   // TODO: make filepath param
   pc_filename = "bin/map.pcd";
   mesh_filename = "bin/map.stl";
@@ -46,10 +51,14 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   }
 
   photoscan_filename = "/home/matt/Documents/campus_doc.xml";
-  if(!LoadPhotoscanFile(photoscan_filename, "data/GFTTKeypointsAndDescriptors1500.bin", true))
+  if(!LoadPhotoscanFile(photoscan_filename, "data/ASiftKeypointsAndDescriptors.bin", true))
   {
     return;
   }
+
+  //std::cout << "Mapping features to point cloud..." << std::flush;
+  //map_features = MapFeatures(keyframes, map_cloud);
+  //std::cout << "done" << std::endl;
 
   srand(time(NULL));
   
@@ -96,8 +105,15 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
     //Mat test = imread("/home/matt/uav_image_data/run11/frame0039.jpg", CV_LOAD_IMAGE_GRAYSCALE );
     //KeyframeContainer* kf = new KeyframeContainer(test, Eigen::Matrix4f());
     //KeyframeContainer* kf = currentKeyframe;
-    KeyframeContainer* kf = keyframes[rand() % keyframes.size()];
-
+    KeyframeContainer* kf = keyframes[150];//keyframes[rand() % keyframes.size()];
+    
+#if 0
+    Eigen::Matrix4f imgTf = FindImageTfPnp(kf, map_features);
+    currentPosition = imgTf.block<3,1>(0,3);
+    positionList.push_back(currentPosition);
+    PublishTfViz(imgTf, kf->GetTf());
+#else
+    
     std::vector< KeyframeMatch > matches = FindImageMatches(kf, 5);//, isLocalized); // Only do local search if position is known
     std::vector< KeyframeMatch > goodMatches;
     std::vector< Eigen::Vector3f > goodTVecs;
@@ -149,7 +165,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
     }
 #endif
 
-    Eigen::Matrix4f imgTf = FindImageTf(kf, matches, goodMatches, goodTVecs);
+    Eigen::Matrix4f imgTf = FindImageTfSfm(kf, matches, goodMatches, goodTVecs);
     if(goodMatches.size() >= 2)
     {
       ROS_INFO("Found image tf");
@@ -157,7 +173,8 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       numLocalizeRetrys = 0;
       currentPosition = imgTf.block<3,1>(0,3);
       positionList.push_back(currentPosition);
-      PublishTfViz(imgTf, kf->GetTf(), goodMatches, goodTVecs);
+      PublishTfViz(imgTf, kf->GetTf());
+      PublishSfmMatchViz(goodMatches, goodTVecs);
     }
     else
     {
@@ -167,7 +184,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
         isLocalized = false;
       }
     }
-
+#endif
     // For now just delete currentKeyframe, should probably add to keyframe list 
     // if tf estimate is good enough
     //delete currentKeyframe;
@@ -193,64 +210,7 @@ void MapLocalizer::PublishPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pc)
   pointcloud_pub.publish(pc);
 }
 
-void MapLocalizer::PublishPointCloud(const std::vector<pcl::PointXYZ>& pc)
-{
-  pcl::PointCloud<pcl::PointXYZ> msg;
-  msg.header.frame_id = "/markers";
-  msg.header.stamp = ros::Time();
-
-  for(unsigned int i = 0; i < pc.size(); i++)
-  {
-    msg.points.push_back(pc[i]);
-  }
-
-  pointcloud_pub.publish(msg);
-}
-
-void MapLocalizer::PublishMap()
-{
-  tf::Transform transform;
-  transform.setOrigin( tf::Vector3(0.0, 0.0, 0.0) );
-  tf::Quaternion qtf;
-  qtf.setRPY(0.0, 0, 0);
-  transform.setRotation(qtf);
-  br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map_localize", "world"));
-  
-  tf::Transform marker_transform;
-  marker_transform.setOrigin( tf::Vector3(0.0, 0.0, 0.0) );
-  tf::Quaternion marker_qtf;
-  marker_qtf.setRPY(0, 150.*(M_PI/180), 0);
-  marker_transform.setRotation(marker_qtf);
-  br.sendTransform(tf::StampedTransform(marker_transform, ros::Time::now(), "world", "markers"));
-
-  visualization_msgs::Marker marker;
-  marker.header.frame_id = "/markers";
-  marker.header.stamp = ros::Time();
-  marker.ns = "map_localize";
-  marker.id = 0;
-  marker.type = visualization_msgs::Marker::MESH_RESOURCE;
-  marker.action = visualization_msgs::Marker::ADD;
-  marker.pose.position.x = 0;
-  marker.pose.position.y = 0;
-  marker.pose.position.z = 0;
-  marker.pose.orientation.x = 0;
-  marker.pose.orientation.y = 0;
-  marker.pose.orientation.z = 0;
-  marker.pose.orientation.w = 0;
-  marker.scale.x = 1.0;
-  marker.scale.y = 1.0;
-  marker.scale.z = 1.0;
-  marker.color.a = 0.6;
-  marker.color.r = 0.5;
-  marker.color.g = 0.5;
-  marker.color.b = 0.5;
-  //only if using a MESH_RESOURCE marker type:
-  marker.mesh_resource = std::string("package://map_localize/") + mesh_filename;
-
-  map_marker_pub.publish(marker);
-}
-
-void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImgTf, std::vector< KeyframeMatch > matches, std::vector< Eigen::Vector3f > tvecs)
+void MapLocalizer::PublishSfmMatchViz(std::vector<KeyframeMatch > matches, std::vector< Eigen::Vector3f > tvecs)
 {
   const double ptSize = 0.1;
 
@@ -350,6 +310,68 @@ void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImg
 
   tvec_marker_pub.publish(tvec_array);
 
+}
+
+void MapLocalizer::PublishPointCloud(const std::vector<pcl::PointXYZ>& pc)
+{
+  pcl::PointCloud<pcl::PointXYZ> msg;
+  msg.header.frame_id = "/markers";
+  msg.header.stamp = ros::Time();
+
+  for(unsigned int i = 0; i < pc.size(); i++)
+  {
+    msg.points.push_back(pc[i]);
+  }
+
+  pointcloud_pub.publish(msg);
+}
+
+void MapLocalizer::PublishMap()
+{
+  tf::Transform transform;
+  transform.setOrigin( tf::Vector3(0.0, 0.0, 0.0) );
+  tf::Quaternion qtf;
+  qtf.setRPY(0.0, 0, 0);
+  transform.setRotation(qtf);
+  br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map_localize", "world"));
+  
+  tf::Transform marker_transform;
+  marker_transform.setOrigin( tf::Vector3(0.0, 0.0, 0.0) );
+  tf::Quaternion marker_qtf;
+  marker_qtf.setRPY(0, 150.*(M_PI/180), 0);
+  marker_transform.setRotation(marker_qtf);
+  br.sendTransform(tf::StampedTransform(marker_transform, ros::Time::now(), "world", "markers"));
+
+  visualization_msgs::Marker marker;
+  marker.header.frame_id = "/markers";
+  marker.header.stamp = ros::Time();
+  marker.ns = "map_localize";
+  marker.id = 0;
+  marker.type = visualization_msgs::Marker::MESH_RESOURCE;
+  marker.action = visualization_msgs::Marker::ADD;
+  marker.pose.position.x = 0;
+  marker.pose.position.y = 0;
+  marker.pose.position.z = 0;
+  marker.pose.orientation.x = 0;
+  marker.pose.orientation.y = 0;
+  marker.pose.orientation.z = 0;
+  marker.pose.orientation.w = 0;
+  marker.scale.x = 1.0;
+  marker.scale.y = 1.0;
+  marker.scale.z = 1.0;
+  marker.color.a = 0.6;
+  marker.color.r = 0.5;
+  marker.color.g = 0.5;
+  marker.color.b = 0.5;
+  //only if using a MESH_RESOURCE marker type:
+  marker.mesh_resource = std::string("package://map_localize/") + mesh_filename;
+
+  map_marker_pub.publish(marker);
+}
+
+void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImgTf)
+{
+  const double ptSize = 0.1;
 
   std::vector<geometry_msgs::Point> epos;
   geometry_msgs::Point epos_pt;
@@ -479,11 +501,6 @@ std::vector<pcl::PointXYZ> MapLocalizer::GetPointCloudFromFrames(KeyframeContain
   std::vector<KeyPoint> correspImg1Pt;
   const double matchRatio = 0.85;
 	
-  Matx33d Kcv(K(0,0), K(0,1), K(0,2),
-              K(1,0), K(1,1), K(1,2),
-              K(2,0), K(2,1), K(2,2));
-  Mat distcoeffcv = (Mat_<double>(5,1) << distcoeff(0), distcoeff(1), distcoeff(2), distcoeff(3), distcoeff(4)); 
-  
   Eigen::Matrix4f tf1 = kfc1->GetTf().inverse();
   Eigen::Matrix4f tf2 = kfc2->GetTf().inverse();
 
@@ -589,11 +606,6 @@ bool MapLocalizer::LoadPhotoscanFile(std::string filename, std::string desc_file
   std::ifstream desc_file;
   TiXmlDocument doc(filename);
 
-  Matx33d Kcv(K(0,0), K(0,1), K(0,2),
-              K(1,0), K(1,1), K(1,2),
-              K(2,0), K(2,1), K(2,2));
-  Mat distcoeffcv = (Mat_<double>(5,1) << distcoeff(0), distcoeff(1), distcoeff(2), distcoeff(3), distcoeff(4)); 
-  
   std::cout << "Loading " << filename << "..." << std::flush;
   if(!doc.LoadFile())
   {  
@@ -667,7 +679,7 @@ bool MapLocalizer::LoadPhotoscanFile(std::string filename, std::string desc_file
           std::vector<KeyPoint> keypoints;
           int size;
           desc_file.read((char*)&size, sizeof(int));
-          for(unsigned int i = 0; i < size; i++)
+          for(int i = 0; i < size; i++)
           {
             KeyPoint kp;
             desc_file.read((char*)&kp, sizeof(KeyPoint));
@@ -692,6 +704,7 @@ bool MapLocalizer::LoadPhotoscanFile(std::string filename, std::string desc_file
           kfc = new KeyframeContainer(img_undistort, tf, K);
         }
         keyframes.push_back(kfc);    
+        //std::cout << keyframes.size() << std::endl;
       }
       //std::cout << "Found chunk " << chunk->Attribute("label") << std::endl;
     }
@@ -727,7 +740,7 @@ bool MapLocalizer::WriteDescriptorsToFile(std::string filename)
   {
     int size = keyframes[i]->GetKeypoints().size();
     file.write((char*)&size, sizeof(int));
-    for(unsigned int j = 0; j < size; j++)
+    for(int j = 0; j < size; j++)
     {
       KeyPoint kp = keyframes[i]->GetKeypoints()[j];
       file.write((char*)&kp, sizeof(KeyPoint));
@@ -765,6 +778,55 @@ bool MapLocalizer::WriteDescriptorsToFile(std::string filename)
   */
   
   return true;
+}
+
+Eigen::Matrix4f MapLocalizer::FindImageTfPnp(KeyframeContainer* kfc, const MapFeatures& mf)
+{
+  Eigen::Matrix4f tf;
+  
+  // Find image features matches in map
+  const double matchRatio = 0.8;
+
+  FlannBasedMatcher matcher;
+  std::vector < std::vector< DMatch > > matches;
+  matcher.knnMatch( kfc->GetDescriptors(), mf.GetDescriptors(), matches, 2 );
+
+  std::vector< DMatch > goodMatches;
+  std::vector< DMatch > allMatches;
+  std::vector<Point2f> matchPts;
+  std::vector<Point3f> matchPts3d;
+
+  for(unsigned int j = 0; j < matches.size(); j++)
+  {
+    allMatches.push_back(matches[j][0]);
+    if(matches[j][0].distance < matchRatio*matches[j][1].distance)
+    {
+      pcl::PointXYZ pt3d = mf.GetKeypoints()[matches[j][0].trainIdx];
+
+      goodMatches.push_back(matches[j][0]);
+      matchPts.push_back(kfc->GetKeypoints()[matches[j][0].queryIdx].pt);
+      matchPts3d.push_back(Point3f(pt3d.x, pt3d.y, pt3d.z));
+    }
+  }
+ 
+  if(goodMatches.size() <= 0)
+  {
+    ROS_WARN("No matches found in map");
+    return tf;
+  }
+  // Solve for camera transform
+  Mat Rvec, t;
+  //solvePnP(matchPts3d, matchPts, Kcv, distcoeffcv, Rvec, t);
+  solvePnPRansac(matchPts3d, matchPts, Kcv, distcoeffcv, Rvec, t);
+
+  Mat R;
+  Rodrigues(Rvec, R);
+
+  tf << R.at<double>(0,0), R.at<double>(0,1), R.at<double>(0,2), t.at<double>(0),
+        R.at<double>(1,0), R.at<double>(1,1), R.at<double>(1,2), t.at<double>(1),
+        R.at<double>(2,0), R.at<double>(2,1), R.at<double>(2,2), t.at<double>(2),
+             0,      0,      0,    1;
+  return tf;
 }
 
 std::vector< KeyframeMatch > MapLocalizer::FindImageMatches(KeyframeContainer* img, int k, bool usePos)
@@ -831,7 +893,7 @@ std::vector< KeyframeMatch > MapLocalizer::FindImageMatches(KeyframeContainer* i
   return std::vector< KeyframeMatch > (kfMatches.begin(), kfMatches.begin()+k);
 }
 
-Eigen::Matrix4f MapLocalizer::FindImageTf(KeyframeContainer* img, std::vector< KeyframeMatch > matches, std::vector< KeyframeMatch >& goodMatches, std::vector< Eigen::Vector3f >& goodTVecs)
+Eigen::Matrix4f MapLocalizer::FindImageTfSfm(KeyframeContainer* img, std::vector< KeyframeMatch > matches, std::vector< KeyframeMatch >& goodMatches, std::vector< Eigen::Vector3f >& goodTVecs)
 {
   Eigen::Matrix4f tf = Eigen::MatrixXf::Identity(4,4);
   std::vector<Eigen::Matrix4f> goodPs;
@@ -839,11 +901,6 @@ Eigen::Matrix4f MapLocalizer::FindImageTf(KeyframeContainer* img, std::vector< K
   goodTVecs.clear();
 
   bool useH = false;
-
-  Matx33d Kcv(K(0,0), K(0,1), K(0,2),
-              K(1,0), K(1,1), K(1,2),
-              K(2,0), K(2,1), K(2,2)); 
-  Mat distcoeffcv = (Mat_<double>(5,1) << distcoeff(0), distcoeff(1), distcoeff(2), distcoeff(3), distcoeff(4)); 
 
   for(unsigned int i = 0; i < matches.size(); i++)
   {

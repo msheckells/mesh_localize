@@ -15,9 +15,10 @@ class MapFeatures
 {
 public:
   MapFeatures(std::vector<KeyframeContainer*>& kcv,  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud);
+  MapFeatures(){};
   
-  Mat GetDescriptors();
-  std::vector<pcl::PointXYZ> GetKeypoints();
+  Mat GetDescriptors() const;
+  std::vector<pcl::PointXYZ> GetKeypoints() const;
 private:
   std::vector<KeyframeContainer*> kcv;
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;

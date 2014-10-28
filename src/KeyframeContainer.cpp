@@ -1,4 +1,5 @@
 #include "map_localize/KeyframeContainer.h"
+#include "map_localize/ASiftDetector.h"
 
 KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, Eigen::Matrix3f K, int minHessian) :
   tf(tf),
@@ -7,12 +8,15 @@ KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, Eigen::Matri
 {
   //SurfFeatureDetector detector(minHessian);
   //SiftFeatureDetector detector;
-  GoodFeaturesToTrackDetector detector(1500, 0.01, 1.0);
-  detector.detect(img, keypoints);
+  //GoodFeaturesToTrackDetector detector(1500, 0.01, 1.0);
+  //detector.detect(img, keypoints);
   
   //SurfDescriptorExtractor extractor;
-  SiftDescriptorExtractor extractor;
-  extractor.compute(img, keypoints, descriptors);
+  //SiftDescriptorExtractor extractor;
+  //extractor.compute(img, keypoints, descriptors);
+
+  ASiftDetector detector;
+  detector.detectAndCompute(img, keypoints, descriptors);  
 }
 
 KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, Eigen::Matrix3f K, std::vector<KeyPoint>& keypoints, Mat& descriptors, int minHessian) :
