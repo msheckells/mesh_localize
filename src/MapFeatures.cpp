@@ -1,11 +1,10 @@
 #include "map_localize/MapFeatures.h"
 
-MapFeatures::MapFeatures(std::vector<KeyframeContainer*>& kcv,  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud) :
+MapFeatures::MapFeatures(std::vector<KeyframeContainer*>& kcv,  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud) :
 kcv(kcv), cloud(cloud)
 {
-  const int match_neighborhood = 8;
+  const int match_neighborhood = 1;
   const int maxDepth = 99999999;
-  std::vector<bool> hasDesc(cloud->size(), false);
   descriptors = Mat(0, kcv[0]->GetDescriptors().cols, CV_32F);
 
   for(unsigned int i = 0; i < kcv.size(); i++)
@@ -27,6 +26,7 @@ kcv(kcv), cloud(cloud)
     {
       Eigen::Vector4f hpt(cloud->points[j].x, cloud->points[j].y, cloud->points[j].z, 1);
       Eigen::Vector3f impt = P*hpt;
+      impt /= impt(2);
       if(impt(0) < 0  || impt(0) >= width || impt(1) < 0 || impt(1) >= height)
       {
         continue;
@@ -57,7 +57,7 @@ kcv(kcv), cloud(cloud)
           {
             if(k < 0 || k >= width || l < 0 || l >= height)
               continue;
-            if(depths[k][l] < maxDepth && !hasDesc[idx_3dpt[k][l]])
+            if(depths[k][l] < maxDepth)
             {
               closestPt = idx_3dpt[k][l];
             }
@@ -66,8 +66,7 @@ kcv(kcv), cloud(cloud)
       }
       if(closestPt != -1)
       {
-        hasDesc[closestPt] = true;
-        keypoints.push_back(cloud->points[closestPt]);
+        keypoints.push_back(pcl::PointXYZ(cloud->points[closestPt].x, cloud->points[closestPt].y, cloud->points[closestPt].z));
         descriptors.push_back(kcv[i]->GetDescriptors().row(j));
       }
     }

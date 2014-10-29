@@ -6,17 +6,19 @@ KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, Eigen::Matri
   K(K),
   img(image)
 {
-  //SurfFeatureDetector detector(minHessian);
-  //SiftFeatureDetector detector;
-  //GoodFeaturesToTrackDetector detector(1500, 0.01, 1.0);
-  //detector.detect(img, keypoints);
-  
-  //SurfDescriptorExtractor extractor;
-  //SiftDescriptorExtractor extractor;
-  //extractor.compute(img, keypoints, descriptors);
-
+#ifdef _USE_ASIFT_
   ASiftDetector detector;
   detector.detectAndCompute(img, keypoints, descriptors);  
+#else
+  //SurfFeatureDetector detector(minHessian);
+  //GoodFeaturesToTrackDetector detector(1500, 0.01, 1.0);
+  //SurfDescriptorExtractor extractor;
+
+  SiftFeatureDetector detector;
+  detector.detect(img, keypoints);
+  SiftDescriptorExtractor extractor;
+  extractor.compute(img, keypoints, descriptors);
+#endif
 }
 
 KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, Eigen::Matrix3f K, std::vector<KeyPoint>& keypoints, Mat& descriptors, int minHessian) :

@@ -19,7 +19,7 @@
 #include <pcl/sample_consensus/sac_model_plane.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/io/pcd_io.h>
-//#define SHOW_MATCHES_ 
+#define SHOW_MATCHES_ 
 
 MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     currentKeyframe(NULL),
@@ -40,25 +40,25 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   distcoeffcv = (Mat_<double>(5,1) << distcoeff(0), distcoeff(1), distcoeff(2), distcoeff(3), distcoeff(4)); 
 
   // TODO: make filepath param
-  pc_filename = "bin/map.pcd";
+  pc_filename = "bin/map_points.pcd";
   mesh_filename = "bin/map.stl";
-  map_cloud = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
+  map_cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>);
 
-  if(pcl::io::loadPCDFile<pcl::PointXYZ> (pc_filename, *map_cloud) == -1)
+  if(pcl::io::loadPCDFile<pcl::PointXYZRGB> (pc_filename, *map_cloud) == -1)
   {
     std::cout << "Could not open point cloud " << pc_filename << std::endl;
     return;
   }
 
   photoscan_filename = "/home/matt/Documents/campus_doc.xml";
-  if(!LoadPhotoscanFile(photoscan_filename, "data/ASiftKeypointsAndDescriptors.bin", true))
+  if(!LoadPhotoscanFile(photoscan_filename, "data/SiftKeypointsAndDescriptors.bin", true))
   {
     return;
   }
 
-  //std::cout << "Mapping features to point cloud..." << std::flush;
-  //map_features = MapFeatures(keyframes, map_cloud);
-  //std::cout << "done" << std::endl;
+  std::cout << "Mapping features to point cloud..." << std::flush;
+  map_features = MapFeatures(keyframes, map_cloud);
+  std::cout << "done" << std::endl;
 
   srand(time(NULL));
   
@@ -102,19 +102,27 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
   PublishMap();
   //if(currentKeyframe)
   {
-    //Mat test = imread("/home/matt/uav_image_data/run11/frame0039.jpg", CV_LOAD_IMAGE_GRAYSCALE );
+    //Mat test = imread("/home/matt/uav_image_data/run11/frame0029.jpg", CV_LOAD_IMAGE_GRAYSCALE );
     //KeyframeContainer* kf = new KeyframeContainer(test, Eigen::Matrix4f());
     //KeyframeContainer* kf = currentKeyframe;
-    KeyframeContainer* kf = keyframes[150];//keyframes[rand() % keyframes.size()];
-    
-#if 0
+    KeyframeContainer* kf = keyframes[100];//keyframes[rand() % keyframes.size()];
+#if 1
+    //Mat img = GenerateVirtualImage(kf->GetTf(), kf->GetK(), kf->GetImage().rows, kf->GetImage().cols, map_cloud);
+    namedWindow( "Query", WINDOW_AUTOSIZE );// Create a window for display.
+    imshow( "Query", kf->GetImage() ); 
+    waitKey(0);
+    //namedWindow( "Virtual", WINDOW_AUTOSIZE );// Create a window for display.
+    //imshow( "Virtual", img ); 
+    //waitKey(0);
     Eigen::Matrix4f imgTf = FindImageTfPnp(kf, map_features);
     currentPosition = imgTf.block<3,1>(0,3);
-    positionList.push_back(currentPosition);
-    PublishTfViz(imgTf, kf->GetTf());
+    std::cout << "Estimated tf: " << std::endl << imgTf << std::endl;
+    std::cout << "Acutal tf: " << std::endl << kf->GetTf() << std::endl;
+    //positionList.push_back(currentPosition);
+    //PublishTfViz(imgTf, kf->GetTf());
 #else
     
-    std::vector< KeyframeMatch > matches = FindImageMatches(kf, 5);//, isLocalized); // Only do local search if position is known
+    std::vector< KeyframeMatch > matches = FindImageMatches(kf, 7);//, isLocalized); // Only do local search if position is known
     std::vector< KeyframeMatch > goodMatches;
     std::vector< Eigen::Vector3f > goodTVecs;
 
@@ -130,10 +138,11 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       }
     }
     //ROS_INFO("Found matches");
-    std::vector<pcl::PointXYZ> pclCloud = GetPointCloudFromFrames(matches[1].kfc, matches[2].kfc);
-    std::vector<Point3d> cvCloud = PCLToPoint3d(pclCloud);
-    std::vector<int> planeIdx, nonplaneIdx;
+    //std::vector<pcl::PointXYZ> pclCloud = GetPointCloudFromFrames(matches[1].kfc, matches[2].kfc);
+    //std::vector<Point3d> cvCloud = PCLToPoint3d(pclCloud);
+    //std::vector<int> planeIdx, nonplaneIdx;
     //ROS_INFO("Got point cloud");
+    /*
     if(pclCloud.size() > 5)
     {
       std::vector<int> inliers = FindPlaneInPointCloud(pclCloud);
@@ -142,7 +151,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       {
         planeCloud.push_back(pclCloud[inliers[i]]);
       }
-      PublishPointCloud(map_cloud);
+      //PublishPointCloud(map_cloud);
       //PublishPointCloud(pclCloud);
       TestCoplanarity(cvCloud, planeIdx, nonplaneIdx);
       //ROS_INFO("Tested for planes");
@@ -153,12 +162,16 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
     }
     PlotTf(matches[1].kfc->GetTf(), "match1");
     PlotTf(matches[2].kfc->GetTf(), "match2");
+    */
 #ifdef SHOW_MATCHES_
     namedWindow( "Query", WINDOW_AUTOSIZE );// Create a window for display.
     imshow( "Query", kf->GetImage() ); 
     waitKey(0);
     for(int i = 0; i < matches.size(); i++)
     {
+      Mat img_matches;
+      //drawMatches(kf->GetImage(), kf->GetKeypoints(), matches[i].kfc->GetImage(), matches[i].kfc->GetKeypoints(), matches[i].matches, img_matches);
+      //imshow("matches", img_matches);
       namedWindow( "Match", WINDOW_AUTOSIZE );// Create a window for display.
       imshow( "Match", matches[i].kfc->GetImage() ); 
       waitKey(0);
@@ -473,6 +486,40 @@ void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImg
 
 }
 
+Mat MapLocalizer::GenerateVirtualImage(Eigen::Matrix4f tf, Eigen::Matrix3f K, int height, int width, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud)
+{
+  Mat img(height, width, CV_8U, Scalar(0));
+  
+  const int maxDepth = 99999999;
+  std::vector< std::vector< double > > depths(width);
+  for(int j = 0; j < width; j++)
+  {
+    depths[j].resize(height, maxDepth);
+  }
+
+  Eigen::MatrixXf P(3,4);
+  P = K*tf.inverse().block<3,4>(0,0);
+  for(unsigned int j = 0; j < cloud->points.size(); j++)
+  {
+    Eigen::Vector4f hpt(cloud->points[j].x, cloud->points[j].y, cloud->points[j].z, 1);
+    Eigen::Vector3f impt = P*hpt;
+    impt /= impt(2);
+    if(impt(0) < 0  || impt(0) >= width || impt(1) < 0 || impt(1) >= height)
+    {
+      continue;
+    }
+    double depth = (tf.inverse()*hpt)(2);
+    int dx_idx = floor(impt(0));
+    int dy_idx = floor(impt(1));
+    if(depth > 0 && depth < depths[dx_idx][dy_idx])
+    {
+      depths[dx_idx][dy_idx] = depth;
+      img.at<uchar>(dy_idx, dx_idx) = (*reinterpret_cast<int*>(&(cloud->points[j].rgb)) & 0x0000ff);
+    }
+  }
+  return img;
+}
+
 std::vector<int> MapLocalizer::FindPlaneInPointCloud(const std::vector<pcl::PointXYZ>& pts)
 {
   std::vector<int> inliers;
@@ -550,7 +597,7 @@ std::vector<pcl::PointXYZ> MapLocalizer::GetPointCloudFromFrames(KeyframeContain
   
   delete reprojError;
  
-#ifdef SHOW_MATCHES_
+#if 0
   namedWindow("matches", 1);
   Mat img_matches;
   drawMatches(kfc1->GetImage(), kfc1->GetKeypoints(), kfc2->GetImage(), kfc2->GetKeypoints(), goodMatches, img_matches);
@@ -832,7 +879,7 @@ Eigen::Matrix4f MapLocalizer::FindImageTfPnp(KeyframeContainer* kfc, const MapFe
 std::vector< KeyframeMatch > MapLocalizer::FindImageMatches(KeyframeContainer* img, int k, bool usePos)
 {
   const double numMatchThresh = 0;//0.16;
-  const double matchRatio = 0.9;
+  const double matchRatio = 0.8;
   std::vector< KeyframeMatch > kfMatches;
   unsigned int searchBound = keyframes.size();
 

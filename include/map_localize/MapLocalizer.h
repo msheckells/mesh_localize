@@ -39,7 +39,7 @@ private:
   Eigen::Matrix4f FindImageTfPnp(KeyframeContainer* kcv, const MapFeatures& mf);
   std::vector<pcl::PointXYZ> GetPointCloudFromFrames(KeyframeContainer*, KeyframeContainer*);
   std::vector<int> FindPlaneInPointCloud(const std::vector<pcl::PointXYZ>& pts);
-
+  Mat GenerateVirtualImage(Eigen::Matrix4f tf, Eigen::Matrix3f K, int height, int width, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud);
 
   
   void PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImgTf);
@@ -64,7 +64,7 @@ private:
   bool isLocalized;
   int numLocalizeRetrys;
 
-  pcl::PointCloud<pcl::PointXYZ>::Ptr map_cloud;
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr map_cloud;
   MapFeatures map_features;
 
   std::string pc_filename;

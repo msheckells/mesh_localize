@@ -14,14 +14,14 @@ using namespace cv;
 class MapFeatures
 {
 public:
-  MapFeatures(std::vector<KeyframeContainer*>& kcv,  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud);
+  MapFeatures(std::vector<KeyframeContainer*>& kcv,  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud);
   MapFeatures(){};
   
   Mat GetDescriptors() const;
   std::vector<pcl::PointXYZ> GetKeypoints() const;
 private:
   std::vector<KeyframeContainer*> kcv;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
   std::vector<pcl::PointXYZ> keypoints;
   Mat descriptors;
 };
