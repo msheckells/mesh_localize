@@ -2,9 +2,10 @@
 #include <tinyxml.h>
 #include <algorithm>
 #include <sstream>
-#include <stdlib.h>     
+#include <cstdlib>     
 #include <time.h> 
 #include <fstream>
+#include <algorithm>
 #include <Eigen/Dense>
 #include <unsupported/Eigen/MatrixFunctions>
 #include <cv_bridge/cv_bridge.h>
@@ -42,9 +43,9 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   // TODO: make filepath param
   pc_filename = "bin/map_points.pcd";
   mesh_filename = "bin/map.stl";
-  map_cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>);
+  map_cloud = pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr(new pcl::PointCloud<pcl::PointXYZRGBNormal>);
 
-  if(pcl::io::loadPCDFile<pcl::PointXYZRGB> (pc_filename, *map_cloud) == -1)
+  if(pcl::io::loadPCDFile<pcl::PointXYZRGBNormal> (pc_filename, *map_cloud) == -1)
   {
     std::cout << "Could not open point cloud " << pc_filename << std::endl;
     return;
@@ -57,10 +58,10 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   }
 
   std::cout << "Mapping features to point cloud..." << std::flush;
-  map_features = MapFeatures(keyframes, map_cloud);
+  //map_features = MapFeatures(keyframes, map_cloud);
   std::cout << "done" << std::endl;
 
-  srand(time(NULL));
+  std::srand(time(NULL));
   
   map_marker_pub = nh.advertise<visualization_msgs::Marker>("/map_localize/map", 0);
   match_marker_pub = nh.advertise<visualization_msgs::Marker>("/map_localize/match_points", 0);
@@ -105,21 +106,20 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
     //Mat test = imread("/home/matt/uav_image_data/run11/frame0029.jpg", CV_LOAD_IMAGE_GRAYSCALE );
     //KeyframeContainer* kf = new KeyframeContainer(test, Eigen::Matrix4f());
     //KeyframeContainer* kf = currentKeyframe;
-    KeyframeContainer* kf = keyframes[100];//keyframes[rand() % keyframes.size()];
+    KeyframeContainer* kf = keyframes[std::rand() % keyframes.size()];
 #if 1
-    //Mat img = GenerateVirtualImage(kf->GetTf(), kf->GetK(), kf->GetImage().rows, kf->GetImage().cols, map_cloud);
-    namedWindow( "Query", WINDOW_AUTOSIZE );// Create a window for display.
-    imshow( "Query", kf->GetImage() ); 
-    waitKey(0);
-    //namedWindow( "Virtual", WINDOW_AUTOSIZE );// Create a window for display.
-    //imshow( "Virtual", img ); 
-    //waitKey(0);
-    Eigen::Matrix4f imgTf = FindImageTfPnp(kf, map_features);
-    currentPosition = imgTf.block<3,1>(0,3);
-    std::cout << "Estimated tf: " << std::endl << imgTf << std::endl;
-    std::cout << "Acutal tf: " << std::endl << kf->GetTf() << std::endl;
+    Eigen::Matrix4f gtf = Eigen::MatrixXf::Identity(4,4);
+    gtf(0,3) = 0.5;
+    gtf(1,3) = 0.25;
+    gtf(2,3) = -0.5;
+
+
+    Eigen::Matrix4f imgTf = FindImageTfVirtualPnp(kf, gtf*kf->GetTf(), kf->GetK());
+    //currentPosition = imgTf.block<3,1>(0,3);
+    std::cout << "Estimated tf: " << std::endl << imgTf.inverse() << std::endl;
+    std::cout << "Actual tf: " << std::endl << kf->GetTf().inverse() << std::endl;
     //positionList.push_back(currentPosition);
-    //PublishTfViz(imgTf, kf->GetTf());
+    PublishTfViz(imgTf, kf->GetTf());
 #else
     
     std::vector< KeyframeMatch > matches = FindImageMatches(kf, 7);//, isLocalized); // Only do local search if position is known
@@ -486,37 +486,47 @@ void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImg
 
 }
 
-Mat MapLocalizer::GenerateVirtualImage(Eigen::Matrix4f tf, Eigen::Matrix3f K, int height, int width, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud)
+Mat MapLocalizer::GenerateVirtualImage(Eigen::Matrix4f tf, Eigen::Matrix3f K, int height, int width, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud, Mat& depths, Mat& mask)
 {
+  double scale = 1.0;
+  height *= scale;
+  width *= scale;
+
   Mat img(height, width, CV_8U, Scalar(0));
-  
-  const int maxDepth = 99999999;
-  std::vector< std::vector< double > > depths(width);
-  for(int j = 0; j < width; j++)
-  {
-    depths[j].resize(height, maxDepth);
-  }
+  depths = Mat(height, width, CV_32F, Scalar(-1));
+  mask = Mat(height, width, CV_8U, Scalar(0));
 
   Eigen::MatrixXf P(3,4);
   P = K*tf.inverse().block<3,4>(0,0);
   for(unsigned int j = 0; j < cloud->points.size(); j++)
   {
+    Eigen::Matrix3f Rinv = tf.inverse().block<3,3>(0,0);
+    Eigen::Vector3f normal(cloud->points[j].normal_x, cloud->points[j].normal_y, cloud->points[j].normal_z);
+    normal = Rinv*normal;
+
     Eigen::Vector4f hpt(cloud->points[j].x, cloud->points[j].y, cloud->points[j].z, 1);
     Eigen::Vector3f impt = P*hpt;
     impt /= impt(2);
-    if(impt(0) < 0  || impt(0) >= width || impt(1) < 0 || impt(1) >= height)
+    int dx_idx = floor(impt(0)*scale);
+    int dy_idx = floor(impt(1)*scale);
+    if(dx_idx < 0  || dx_idx >= width || dy_idx < 0 || dy_idx >= height)
     {
       continue;
     }
     double depth = (tf.inverse()*hpt)(2);
-    int dx_idx = floor(impt(0));
-    int dy_idx = floor(impt(1));
-    if(depth > 0 && depth < depths[dx_idx][dy_idx])
+    
+    if(depth > 0 /*&& normal(2) < 0*/ && (depths.at<float>(dy_idx, dx_idx) == -1 || depth < depths.at<float>(dy_idx, dx_idx)))
     {
-      depths[dx_idx][dy_idx] = depth;
+      depths.at<float>(dy_idx, dx_idx) = depth;
+      mask.at<uchar>(dy_idx, dx_idx) = 255;
       img.at<uchar>(dy_idx, dx_idx) = (*reinterpret_cast<int*>(&(cloud->points[j].rgb)) & 0x0000ff);
     }
   }
+
+  //pyrUp(img, img);//, Size(oldheight, oldwidth));
+  medianBlur(img, img, 3);
+  medianBlur(depths, depths, 5);
+  //medianBlur(mask, mask, 3);
   return img;
 }
 
@@ -822,9 +832,202 @@ bool MapLocalizer::WriteDescriptorsToFile(std::string filename)
     write(fs, std::string("descriptors") + ss.str(), keyframes[i]->GetDescriptors());
   }
   fs.release();
+  return true;
   */
   
-  return true;
+}
+
+Eigen::Matrix4f MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f vimgTf, Eigen::Matrix3f vimgK)
+{
+  Eigen::Matrix4f tf = Eigen::MatrixXf::Identity(4,4);
+
+  // Get virtual image and depth map
+  Mat depth, mask;
+  Mat vimg = GenerateVirtualImage(vimgTf, vimgK, kfc->GetImage().rows, kfc->GetImage().cols, map_cloud, depth, mask);
+
+#if 0
+  Mat depth_im;
+  double min_depth, max_depth;
+  minMaxLoc(depth, &min_depth, &max_depth);    
+  depth.convertTo(depth_im, CV_8U, 255.0/(max_depth-min_depth), 0);//-255.0/min_depth);
+
+  namedWindow( "Query", WINDOW_AUTOSIZE );// Create a window for display.
+  imshow( "Query", kfc->GetImage() ); 
+  namedWindow( "Virtual", WINDOW_AUTOSIZE );// Create a window for display.
+  imshow( "Virtual", vimg ); 
+  namedWindow( "Depth", WINDOW_AUTOSIZE );// Create a window for display.
+  imshow( "Depth", depth_im ); 
+  namedWindow( "Mask", WINDOW_AUTOSIZE );// Create a window for display.
+  imshow( "Mask", mask ); 
+  waitKey(0);
+#endif
+
+  // Find features in virtual image
+  std::vector<KeyPoint> vkps;
+  Mat vdesc;
+
+  SiftFeatureDetector detector;
+  detector.detect(vimg, vkps, mask);
+
+  SiftDescriptorExtractor extractor;
+  extractor.compute(vimg, vkps, vdesc);
+
+
+  // Find image features matches between kfc and vimg
+  const double matchRatio = 0.6;
+
+  FlannBasedMatcher matcher;
+  std::vector < std::vector< DMatch > > matches;
+  matcher.knnMatch( kfc->GetDescriptors(), vdesc, matches, 2 );
+
+  std::vector< DMatch > goodMatches;
+  std::vector< DMatch > allMatches;
+  std::vector<Point2f> matchPts;
+  std::vector<Point2f> matchPts3dProj;
+  std::vector<Point3f> matchPts3d;
+  std::vector<pcl::PointXYZ> matchPts3d_pcl;
+
+  for(unsigned int j = 0; j < matches.size(); j++)
+  {
+    allMatches.push_back(matches[j][0]);
+    if(matches[j][0].distance < matchRatio*matches[j][1].distance)
+    {
+      // Back-project point to 3d
+      Point2f kp = vkps[matches[j][0].trainIdx].pt;
+      Eigen::Vector3f hkp(kp.x, kp.y, 1);
+      Eigen::Vector3f backproj = vimgK.inverse()*hkp;
+      backproj /= backproj(2);    
+      backproj *= depth.at<float>(kp.y, kp.x);
+      Eigen::Vector4f backproj_h(backproj(0), backproj(1), backproj(2), 1);
+      backproj_h = vimgTf*backproj_h;
+ 
+      goodMatches.push_back(matches[j][0]);
+      matchPts3dProj.push_back(kp);
+      matchPts.push_back(kfc->GetKeypoints()[matches[j][0].queryIdx].pt);
+      matchPts3d.push_back(Point3f(backproj_h(0), backproj_h(1), backproj_h(2)));
+      matchPts3d_pcl.push_back(pcl::PointXYZ(backproj_h(0), backproj_h(1), backproj_h(2)));
+    }
+  } 
+  if(goodMatches.size() < 4)
+  {
+    ROS_WARN("Not enough matches found in virtual image");
+    return tf;
+  }
+
+  /**** Pnp on known correspondences from virtual image ****  
+  Mat Rvec_true, t_true;
+  solvePnP(matchPts3d, matchPts3dProj, Kcv, distcoeffcv, Rvec_true, t_true);
+
+  Mat Rtrue;
+  Rodrigues(Rvec_true, Rtrue);
+  Eigen::Matrix4f true_tf;
+  true_tf << Rtrue.at<double>(0,0), Rtrue.at<double>(0,1), Rtrue.at<double>(0,2), t_true.at<double>(0),
+        Rtrue.at<double>(1,0), Rtrue.at<double>(1,1), Rtrue.at<double>(1,2), t_true.at<double>(1),
+        Rtrue.at<double>(2,0), Rtrue.at<double>(2,1), Rtrue.at<double>(2,2), t_true.at<double>(2),
+             0,      0,      0,    1;
+  std::cout << "Known: " << std::endl << vimgTf << std::endl << std::endl << true_tf.inverse() << std::endl; 
+  *****/
+
+#if 0 
+  PublishPointCloud(matchPts3d_pcl);
+  Mat img_matches;
+  drawMatches(kfc->GetImage(), kfc->GetKeypoints(), vimg, vkps, goodMatches, img_matches);
+  imshow("matches", img_matches);
+  waitKey(0);
+#endif
+
+  return RansacPnP(matchPts3d, matchPts, vimgK, vimgTf.inverse()).inverse();
+}
+
+Eigen::Matrix4f MapLocalizer::RansacPnP(std::vector<Point3f> matchPts3d, std::vector<Point2f> matchPts, Eigen::Matrix3f K, Eigen::Matrix4f tfguess)
+{
+  Mat distcoeffcvPnp = (Mat_<double>(4,1) << 0, 0, 0, 0);
+  Eigen::Matrix4f tf = Eigen::MatrixXf::Identity(4,4);
+  Mat Rvec, t;
+  Mat Rguess = (Mat_<double>(3,3) << tfguess(0,0), tfguess(0,1), tfguess(0,2),
+                                     tfguess(1,0), tfguess(1,1), tfguess(1,2),
+                                     tfguess(2,0), tfguess(2,1), tfguess(2,2));
+  Rodrigues(Rguess, Rvec);
+  t = (Mat_<double>(3,1) << tfguess(0,3), tfguess(1,3), tfguess(2,3));
+  
+  // RANSAC PnP
+  const int niter = 50; // Assumes about 45% outliers
+  const double reprojThresh = 4.0; // in pixels
+  const int m = 4; // points per sample
+  
+  std::vector<int> ind;
+  for(unsigned int i = 0; i < matchPts.size(); i++)
+  {
+    ind.push_back(i);
+  }
+
+  std::vector<int> bestInliersIdx;
+
+  for(int i = 0; i < niter; i++)
+  {
+    Eigen::Matrix4f rand_tf;
+    // Get m random points
+    std::random_shuffle(ind.begin(), ind.end());
+    std::vector<int> randInd(ind.begin(), ind.begin()+m);
+
+    std::vector<Point3f> rand_matchPts3d;
+    std::vector<Point2f> rand_matchPts;
+    for(int j = 0; j < m; j++)
+    {
+      rand_matchPts3d.push_back(matchPts3d[randInd[j]]);
+      rand_matchPts.push_back(matchPts[randInd[j]]);
+    }
+
+    Mat ran_Rvec, ran_t;
+    Rvec.copyTo(ran_Rvec);
+    t.copyTo(ran_t);
+
+    solvePnP(rand_matchPts3d, rand_matchPts, Kcv, distcoeffcvPnp, ran_Rvec, ran_t, true, CV_P3P);
+
+    // Test for inliers
+    std::vector<Point2f> reprojPts;
+    projectPoints(matchPts3d, ran_Rvec, ran_t, Kcv, distcoeffcvPnp, reprojPts);
+    std::vector<int> inliersIdx;
+    for(unsigned int j = 0; j < reprojPts.size(); j++)
+    {
+      double reprojError = sqrt((reprojPts[j].x-matchPts[j].x)*(reprojPts[j].x-matchPts[j].x) + (reprojPts[j].y-matchPts[j].y)*(reprojPts[j].y-matchPts[j].y));
+
+      if(reprojError < reprojThresh)
+      {
+        inliersIdx.push_back(j);
+      }
+    }
+    if(inliersIdx.size() > bestInliersIdx.size())
+    {
+      bestInliersIdx = inliersIdx;
+    }
+  } 
+  std::cout << "Num inliers: " << bestInliersIdx.size() << "/" << matchPts.size() << std::endl;
+  if(bestInliersIdx.size() < 4)
+  {
+    ROS_WARN("ransacPnP: Could not find enough inliers");
+    return tf;
+  } 
+  
+  std::vector<Point3f> inlierPts3d;
+  std::vector<Point2f> inlierPts2d;
+  for(unsigned int i = 0; i < bestInliersIdx.size(); i++)
+  {
+    inlierPts3d.push_back(matchPts3d[bestInliersIdx[i]]);
+    inlierPts2d.push_back(matchPts[bestInliersIdx[i]]);
+  }
+
+  solvePnP(inlierPts3d, inlierPts2d, Kcv, distcoeffcvPnp, Rvec, t, true);
+    
+  Mat R;
+  Rodrigues(Rvec, R);
+
+  tf << R.at<double>(0,0), R.at<double>(0,1), R.at<double>(0,2), t.at<double>(0),
+        R.at<double>(1,0), R.at<double>(1,1), R.at<double>(1,2), t.at<double>(1),
+        R.at<double>(2,0), R.at<double>(2,1), R.at<double>(2,2), t.at<double>(2),
+             0,      0,      0,    1;
+  return tf;
+
 }
 
 Eigen::Matrix4f MapLocalizer::FindImageTfPnp(KeyframeContainer* kfc, const MapFeatures& mf)
@@ -832,7 +1035,7 @@ Eigen::Matrix4f MapLocalizer::FindImageTfPnp(KeyframeContainer* kfc, const MapFe
   Eigen::Matrix4f tf;
   
   // Find image features matches in map
-  const double matchRatio = 0.8;
+  const double matchRatio = 0.6;
 
   FlannBasedMatcher matcher;
   std::vector < std::vector< DMatch > > matches;
@@ -873,7 +1076,7 @@ Eigen::Matrix4f MapLocalizer::FindImageTfPnp(KeyframeContainer* kfc, const MapFe
         R.at<double>(1,0), R.at<double>(1,1), R.at<double>(1,2), t.at<double>(1),
         R.at<double>(2,0), R.at<double>(2,1), R.at<double>(2,2), t.at<double>(2),
              0,      0,      0,    1;
-  return tf;
+  return tf.inverse();
 }
 
 std::vector< KeyframeMatch > MapLocalizer::FindImageMatches(KeyframeContainer* img, int k, bool usePos)
