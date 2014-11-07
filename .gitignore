@@ -2,3 +2,5 @@ data
 bin/
 build/
 lib/
+models/
+worlds/

@@ -9,6 +9,7 @@ class ASiftDetector
 public: 
   ASiftDetector();
 
+  void detectAndCompute(const Mat& img, std::vector< KeyPoint >& keypoints, Mat& descriptors, const Mat& mask);
   void detectAndCompute(const Mat& img, std::vector< KeyPoint >& keypoints, Mat& descriptors);
 
 private:

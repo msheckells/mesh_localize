@@ -14,9 +14,9 @@ KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, Eigen::Matri
   //GoodFeaturesToTrackDetector detector(1500, 0.01, 1.0);
   //SurfDescriptorExtractor extractor;
 
-  SiftFeatureDetector detector;
+  SurfFeatureDetector detector;
   detector.detect(img, keypoints);
-  SiftDescriptorExtractor extractor;
+  SurfDescriptorExtractor extractor;
   extractor.compute(img, keypoints, descriptors);
 #endif
 }

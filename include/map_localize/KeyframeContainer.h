@@ -10,6 +10,8 @@
 #include <Eigen/Core>
 #include <Eigen/Dense>
 
+#define _USE_ASIFT_
+
 using namespace cv;
 
 class KeyframeContainer

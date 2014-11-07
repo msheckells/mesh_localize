@@ -24,7 +24,7 @@ class MapLocalizer
     
     bool operator()(KeyframeContainer* kfc1, KeyframeContainer* kfc2)
     {
-      return (kfc1->GetTf().block<3,1>(0,3)-ml->currentPosition).norm() < (kfc2->GetTf().block<3,1>(0,3)-ml->currentPosition).norm();
+      return (kfc1->GetTf().block<3,1>(0,3)-ml->currentPose.block<3,1>(0,3)).norm() < (kfc2->GetTf().block<3,1>(0,3)-ml->currentPose.block<3,1>(0,3)).norm();
     }
   };
 
@@ -37,12 +37,14 @@ private:
   std::vector< KeyframeMatch > FindImageMatches(KeyframeContainer* img, int k, bool usePos = false);
   Eigen::Matrix4f FindImageTfSfm(KeyframeContainer* img, std::vector< KeyframeMatch >, std::vector< KeyframeMatch >& goodMatches, std::vector< Eigen::Vector3f >& goodTVecs);
   Eigen::Matrix4f FindImageTfPnp(KeyframeContainer* kcv, const MapFeatures& mf);
-  Eigen::Matrix4f FindImageTfVirtualPnp(KeyframeContainer* kcv, Eigen::Matrix4f vimg, Eigen::Matrix3f vimgK);
+  bool FindImageTfVirtualPnp(KeyframeContainer* kcv, Eigen::Matrix4f vimg, Eigen::Matrix3f vimgK, Eigen::Matrix4f& out);
   std::vector<pcl::PointXYZ> GetPointCloudFromFrames(KeyframeContainer*, KeyframeContainer*);
   std::vector<int> FindPlaneInPointCloud(const std::vector<pcl::PointXYZ>& pts);
   Mat GenerateVirtualImage(Eigen::Matrix4f tf, Eigen::Matrix3f K, int height, int width, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud, Mat& depth, Mat& mask);
-  Eigen::Matrix4f RansacPnP(std::vector<Point3f> matchPts3d, std::vector<Point2f> matchPts, Eigen::Matrix3f K, Eigen::Matrix4f tfguess);
+  bool RansacPnP(std::vector<Point3f> matchPts3d, std::vector<Point2f> matchPts, Eigen::Matrix3f K, Eigen::Matrix4f tfguess, Eigen::Matrix4f& out);
 
+
+  void TestFindImageTfSfm();
   
   void PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImgTf);
   void PublishSfmMatchViz(std::vector<KeyframeMatch > matches, std::vector< Eigen::Vector3f > tvecs);
@@ -62,8 +64,9 @@ private:
   std::vector<KeyframeContainer*> keyframes;
   KeyframeContainer* currentKeyframe;
   std::vector<Eigen::Vector3f> positionList;
-  Eigen::Vector3f currentPosition;
+  Eigen::Matrix4f currentPose;
   bool isLocalized;
+  bool usePnp;
   int numLocalizeRetrys;
 
   pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr map_cloud;

@@ -1,0 +1,5 @@
+<launch>
+ 	<arg name="world_name" value="$(find map_localize)/worlds/campus.world"/>
+	
+	<node name="gazebo" pkg="gazebo" type="gazebo" args=" $(arg world_name)" output="screen"/>
+</launch>

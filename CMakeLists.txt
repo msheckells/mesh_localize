@@ -47,7 +47,8 @@ target_link_libraries(map_localize ${OpenCV_LIBS} ${TinyXML_LIBRARY})
 
 rosbuild_add_executable(map_localize_node src/map_localize_node.cpp)
 target_link_libraries(map_localize_node map_localize)
-
+rosbuild_add_openmp_flags(map_localize_node)
+rosbuild_add_openmp_flags(map_localize)
 #rosbuild_add_executable(gazebo_localize_node src/gazebo_localize_node.cpp)
 #target_link_libraries(gazebo_localize_node gazebo_localize)
 

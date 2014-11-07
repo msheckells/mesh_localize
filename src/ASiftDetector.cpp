@@ -10,23 +10,37 @@ ASiftDetector::ASiftDetector()
 {
 
 }
-  
+
 void ASiftDetector::detectAndCompute(const Mat& img, std::vector< KeyPoint >& keypoints, Mat& descriptors)
+{
+  int h = img.rows;
+  int w = img.cols;
+  Mat mask(h, w, CV_8UC1, Scalar(255));
+
+  detectAndCompute(img, keypoints, descriptors, mask);
+}
+  
+void ASiftDetector::detectAndCompute(const Mat& img, std::vector< KeyPoint >& keypoints, Mat& descriptors, const Mat& mask)
 {
   keypoints.clear();
   descriptors = Mat(0, 128, CV_32F);
-  for(int tl = 1; tl < 6; tl++)
+  
+  for(int tl = 1; tl < 4/*6*/; tl++)
   {
     double t = pow(2, 0.5*tl);
-    for(int phi = 0; phi < 180; phi += 72.0/t)
+    int lim = 1.8*t;
+    #pragma omp parallel for
+    for(int phil = 0; phil < lim; phil ++)
+    //for(int phi = 0; phi < 180; phi += 100.0/t /*72.0/t*/)
     {
+      double phi = phil*100.0/t;
       std::vector<KeyPoint> kps;
       Mat desc;
 
-      Mat timg, mask, Ai;
+      Mat timg, skew_mask, Ai;
       img.copyTo(timg);
-
-      affineSkew(t, phi, timg, mask, Ai);
+      mask.copyTo(skew_mask);
+      affineSkew(t, phi, timg, skew_mask, Ai);
 
 #if 0
       Mat img_disp;
@@ -37,7 +51,7 @@ void ASiftDetector::detectAndCompute(const Mat& img, std::vector< KeyPoint >& ke
 #endif
 
       SiftFeatureDetector detector;
-      detector.detect(timg, kps, mask);
+      detector.detect(timg, kps, skew_mask);
   
       SiftDescriptorExtractor extractor;
       extractor.compute(timg, kps, desc);
@@ -52,8 +66,11 @@ void ASiftDetector::detectAndCompute(const Mat& img, std::vector< KeyPoint >& ke
         kps[i].pt.x = kpt_t.at<float>(0,0);
         kps[i].pt.y = kpt_t.at<float>(1,0);
       }
-      keypoints.insert(keypoints.end(), kps.begin(), kps.end());
-      descriptors.push_back(desc);
+      #pragma omp critical
+      {
+        keypoints.insert(keypoints.end(), kps.begin(), kps.end());
+        descriptors.push_back(desc);
+      }
       //std::cout << "Added desc " << descriptors.cols << " " << descriptors.rows << " " << desc.cols << " " << desc.rows << std::endl;
     }   
   }
@@ -64,7 +81,7 @@ void ASiftDetector::affineSkew(double tilt, double phi, Mat& img, Mat& mask, Mat
   int h = img.rows;
   int w = img.cols;
 
-  mask = Mat(h, w, CV_8UC1, Scalar(255));  
+  //mask = Mat(h, w, CV_8UC1, Scalar(255));  
 
   Mat A = Mat::eye(2,3, CV_32F);
 

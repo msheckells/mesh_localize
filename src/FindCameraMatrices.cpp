@@ -604,7 +604,8 @@ bool FindCameraMatrices(const Matx33d& K,
 						Matx34d& P,
 						Matx34d& P1,
 						vector<DMatch>& matches,
-						vector<CloudPoint>& outCloud
+						vector<CloudPoint>& outCloud,
+                                                double& reproj_error
 #ifdef __SFM__DEBUG__
 						,const Mat& img_1,
 						const Mat& img_2
@@ -711,6 +712,7 @@ bool FindCameraMatrices(const Matx33d& K,
 					}				
 				}			
 			}
+                        reproj_error = (reproj_error1 + reproj_error2)/2.;
 			for (unsigned int i=0; i<pcloud.size(); i++) {
 				outCloud.push_back(pcloud[i]);
 			}
