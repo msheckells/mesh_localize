@@ -81,6 +81,7 @@ private:
   std::string pc_filename;
   std::string mesh_filename;
   std::string photoscan_filename;
+  std::string virtual_image_source;
 
   ros::NodeHandle nh;
   ros::NodeHandle nh_private;

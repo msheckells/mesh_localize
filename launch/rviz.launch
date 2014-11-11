@@ -1,4 +1,4 @@
 <launch>
-	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find map_localize)/launch/map_localize.rviz.vcg" required="true" />
+	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find map_localize)/launch/map_localize.rviz" required="true" />
 
 </launch>

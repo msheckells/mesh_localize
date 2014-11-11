@@ -50,7 +50,8 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     load_descriptors = false;
   if (!nh_private.getParam("descriptor_filename", descriptor_filename))
     descriptor_filename = "";
-
+  if(!nh_private.getParam("virtual_image_source", virtual_image_source))
+    virtual_image_source = "point_cloud";
   
 
   // TODO: read K and distcoeff from param file
@@ -63,26 +64,24 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
               K(2,0), K(2,1), K(2,2)); 
   distcoeffcv = (Mat_<double>(5,1) << distcoeff(0), distcoeff(1), distcoeff(2), distcoeff(3), distcoeff(4)); 
 
-  map_cloud = pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr(new pcl::PointCloud<pcl::PointXYZRGBNormal>);
 
-  ROS_INFO("Loading point cloud %s", pc_filename.c_str());
-  if(pcl::io::loadPCDFile<pcl::PointXYZRGBNormal> (pc_filename, *map_cloud) == -1)
+  if(virtual_image_source == "point_cloud")
   {
-    std::cout << "Could not open point cloud " << pc_filename << std::endl;
-    return;
+    map_cloud = pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr(new pcl::PointCloud<pcl::PointXYZRGBNormal>);
+    ROS_INFO("Loading point cloud %s", pc_filename.c_str());
+    if(pcl::io::loadPCDFile<pcl::PointXYZRGBNormal> (pc_filename, *map_cloud) == -1)
+    {
+      std::cout << "Could not open point cloud " << pc_filename << std::endl;
+      return;
+    }
+    ROS_INFO("Successfully loaded point cloud");
   }
-  ROS_INFO("Successfully loaded point cloud");
 
   if(!LoadPhotoscanFile(photoscan_filename, descriptor_filename, load_descriptors))
   {
     return;
   }
-/*
-  if(!LoadPhotoscanFile(photoscan_filename, "data/SurfKeypointsAndDescriptors.bin", true))
-  {
-    return;
-  }
-*/
+
   //std::cout << "Mapping features to point cloud..." << std::flush;
   //map_features = MapFeatures(keyframes, map_cloud);
   //std::cout << "done" << std::endl;
@@ -97,23 +96,28 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   path_marker_pub = nh.advertise<visualization_msgs::Marker>("/map_localize/estimated_path", 1);
   pointcloud_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZ> >("/map_localize/pointcloud", 1);
 
-  image_subscriber = nh.subscribe("image", 1, &MapLocalizer::HandleImage, this, ros::TransportHints().tcpNoDelay());
-  gazebo_client = nh.serviceClient<gazebo_msgs::SetLinkState>("/gazebo/set_link_state");
+  //image_subscriber = nh.subscribe("image", 1, &MapLocalizer::HandleImage, this, ros::TransportHints().tcpNoDelay());
+  
 
-  ROS_INFO("Waiting for camera calibration info...");
+  if(virtual_image_source == "gazebo")
+  {
+    ROS_INFO("Using Gazebo for virtual image generation");
+    gazebo_client = nh.serviceClient<gazebo_msgs::SetLinkState>("/gazebo/set_link_state");
+
+    ROS_INFO("Waiting for camera calibration info...");
   
-  sensor_msgs::CameraInfoConstPtr msg = ros::topic::waitForMessage<sensor_msgs::CameraInfo>("virtual_caminfo", nh);
-  virtual_K << msg->K[0], msg->K[1], msg->K[2],
-               msg->K[3], msg->K[4], msg->K[5],
-               msg->K[6], msg->K[7], msg->K[8];
-  virtual_Kcv = Matx33d(virtual_K(0,0), virtual_K(0,1), virtual_K(0,2),
-              virtual_K(1,0), virtual_K(1,1), virtual_K(1,2),
-              virtual_K(2,0), virtual_K(2,1), virtual_K(2,2)); 
-  virtual_width = msg->width;
-  virtual_height = msg->height;
+    sensor_msgs::CameraInfoConstPtr msg = ros::topic::waitForMessage<sensor_msgs::CameraInfo>("virtual_caminfo", nh);
+    virtual_K << msg->K[0], msg->K[1], msg->K[2],
+                 msg->K[3], msg->K[4], msg->K[5],
+                 msg->K[6], msg->K[7], msg->K[8];
+    virtual_Kcv = Matx33d(virtual_K(0,0), virtual_K(0,1), virtual_K(0,2),
+                virtual_K(1,0), virtual_K(1,1), virtual_K(1,2),
+                virtual_K(2,0), virtual_K(2,1), virtual_K(2,2)); 
+    virtual_width = msg->width;
+    virtual_height = msg->height;
   
-  ROS_INFO("Calibration info received");
-  
+    ROS_INFO("Calibration info received");
+  }
 
   timer = nh_private.createTimer(ros::Duration(0.1), &MapLocalizer::spin, this);
 }
@@ -144,34 +148,24 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
 {
   
   PublishMap();
-  //if(currentKeyframe)
+
+  ROS_INFO("Waiting for new image...");
+  sensor_msgs::ImageConstPtr msg = ros::topic::waitForMessage<sensor_msgs::Image>("image", nh);
+  ROS_INFO("Processing new image");
+
+  cv_bridge::CvImageConstPtr cvImg = cv_bridge::toCvShare(msg);
+  Mat img_undistort;
+  undistort(cvImg->image, img_undistort, Kcv, distcoeffcv);
+  currentKeyframe = new KeyframeContainer(img_undistort);
+
+  if(currentKeyframe)
   {
     //Mat test = imread("/home/matt/uav_image_data/run11/frame0029.jpg", CV_LOAD_IMAGE_GRAYSCALE );
     //KeyframeContainer* kf = new KeyframeContainer(test, Eigen::Matrix4f());
-    //KeyframeContainer* kf = currentKeyframe;
-    KeyframeContainer* kf = keyframes[std::rand() % keyframes.size()];
+    KeyframeContainer* kf = currentKeyframe;
+    //KeyframeContainer* kf = keyframes[std::rand() % keyframes.size()];
+
 #if 1
-    Mat depths, mask;
-    Mat vimg = GetVirtualImageFromTopic(kf->GetTf(), depths, mask);
-
-
-    Mat depth_im;
-    double min_depth, max_depth;
-    minMaxLoc(depths, &min_depth, &max_depth);   
-    //std::cout << "max: " << max_depth << " min: " << min_depth << std::endl; 
-    depths.convertTo(depth_im, CV_8U, 255.0/(max_depth-min_depth), 0);
-    
-    namedWindow( "Query", WINDOW_AUTOSIZE );// Create a window for display.
-    imshow( "Query", kf->GetImage() ); 
-    namedWindow( "Virtual", WINDOW_AUTOSIZE );// Create a window for display.
-    imshow( "Virtual", vimg ); 
-    namedWindow( "Depth", WINDOW_AUTOSIZE );// Create a window for display.
-    imshow( "Depth", depth_im ); 
-    namedWindow( "Mask", WINDOW_AUTOSIZE );// Create a window for display.
-    imshow( "Mask", mask ); 
-    waitKey(0);
-
-#elif 0
     // ASift initialization with PnP localization
     if(usePnp)
     {
@@ -182,6 +176,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
         usePnp = false;
         return;
       }
+      currentPose = imgTf;
       //std::cout << "Estimated tf: " << std::endl << imgTf << std::endl;
       //std::cout << "Actual tf: " << std::endl << kf->GetTf() << std::endl;
       positionList.push_back(imgTf.block<3,1>(0,3));
@@ -313,8 +308,8 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
 #endif
     // For now just delete currentKeyframe, should probably add to keyframe list 
     // if tf estimate is good enough
-    //delete currentKeyframe;
-    //currentKeyframe = NULL;
+    delete currentKeyframe;
+    currentKeyframe = NULL;
   }
 }
 
@@ -496,7 +491,7 @@ void MapLocalizer::PublishMap()
   marker.color.g = 0.5;
   marker.color.b = 0.5;
   //only if using a MESH_RESOURCE marker type:
-  marker.mesh_resource = std::string("package://map_localize/") + mesh_filename;
+  marker.mesh_resource = mesh_filename;
 
   map_marker_pub.publish(marker);
 }
@@ -1033,8 +1028,21 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
 
   // Get virtual image and depth map
   Mat depth, mask;
-  Mat vimg = GenerateVirtualImage(vimgTf, vimgK, kfc->GetImage().rows, kfc->GetImage().cols, map_cloud, depth, mask);
-
+  Mat vimg;
+  if(virtual_image_source == "gazebo")
+  {
+    vimg = GetVirtualImageFromTopic(vimgTf, depth, mask);
+  }
+  else if(virtual_image_source == "point_cloud")
+  {
+    vimg = GenerateVirtualImage(vimgTf, vimgK, kfc->GetImage().rows, kfc->GetImage().cols, map_cloud, depth, mask);
+  }
+  else
+  {
+    ROS_ERROR("Invalid virtual_image_source");
+    return false;
+  }
+  
 #if 0
   Mat depth_im;
   double min_depth, max_depth;
@@ -1103,12 +1111,12 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
     }
   } 
 
-#if 0  
+#if 1  
   //PublishPointCloud(matchPts3d_pcl);
   Mat img_matches;
   drawMatches(kfc->GetImage(), kfc->GetKeypoints(), vimg, vkps, goodMatches, img_matches);
   imshow("matches", img_matches);
-  waitKey(1);
+  waitKey(0);
 #endif
 
   if(goodMatches.size() < 4)
