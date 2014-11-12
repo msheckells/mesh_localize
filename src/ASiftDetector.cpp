@@ -11,16 +11,16 @@ ASiftDetector::ASiftDetector()
 
 }
 
-void ASiftDetector::detectAndCompute(const Mat& img, std::vector< KeyPoint >& keypoints, Mat& descriptors)
+void ASiftDetector::detectAndCompute(const Mat& img, std::vector< KeyPoint >& keypoints, Mat& descriptors, ASiftDetector::DescriptorType desc_type)
 {
   int h = img.rows;
   int w = img.cols;
   Mat mask(h, w, CV_8UC1, Scalar(255));
 
-  detectAndCompute(img, keypoints, descriptors, mask);
+  detectAndCompute(img, keypoints, descriptors, mask, desc_type);
 }
   
-void ASiftDetector::detectAndCompute(const Mat& img, std::vector< KeyPoint >& keypoints, Mat& descriptors, const Mat& mask)
+void ASiftDetector::detectAndCompute(const Mat& img, std::vector< KeyPoint >& keypoints, Mat& descriptors, const Mat& mask, ASiftDetector::DescriptorType desc_type)
 {
   keypoints.clear();
   descriptors = Mat(0, 128, CV_32F);
@@ -49,12 +49,22 @@ void ASiftDetector::detectAndCompute(const Mat& img, std::vector< KeyPoint >& ke
       imshow( "Skew", img_disp ); 
       waitKey(0);
 #endif
-
-      SiftFeatureDetector detector;
-      detector.detect(timg, kps, skew_mask);
+      if(desc_type == ASiftDetector::SIFT)
+      {
+        SiftFeatureDetector detector;
+        detector.detect(timg, kps, skew_mask);
   
-      SiftDescriptorExtractor extractor;
-      extractor.compute(timg, kps, desc);
+        SiftDescriptorExtractor extractor;
+        extractor.compute(timg, kps, desc);
+      }
+      else if(desc_type == ASiftDetector::SURF)
+      {
+        SurfFeatureDetector detector;
+        detector.detect(timg, kps, skew_mask);
+  
+        SurfDescriptorExtractor extractor;
+        extractor.compute(timg, kps, desc);
+      }
 
       for(unsigned int i = 0; i < kps.size(); i++)
       {

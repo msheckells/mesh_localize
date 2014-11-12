@@ -7,10 +7,16 @@ using namespace cv;
 class ASiftDetector
 {
 public: 
+  enum DescriptorType
+  {
+    SIFT,
+    SURF
+  };
+
   ASiftDetector();
 
-  void detectAndCompute(const Mat& img, std::vector< KeyPoint >& keypoints, Mat& descriptors, const Mat& mask);
-  void detectAndCompute(const Mat& img, std::vector< KeyPoint >& keypoints, Mat& descriptors);
+  void detectAndCompute(const Mat& img, std::vector< KeyPoint >& keypoints, Mat& descriptors, const Mat& mask, DescriptorType desc_type = SURF);
+  void detectAndCompute(const Mat& img, std::vector< KeyPoint >& keypoints, Mat& descriptors, DescriptorType desc_type = SURF);
 
 private:
   void affineSkew(double tilt, double phi, Mat& img, Mat& mask, Mat& Ai);  

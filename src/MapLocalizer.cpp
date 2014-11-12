@@ -149,14 +149,20 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
   
   PublishMap();
 
+
   ROS_INFO("Waiting for new image...");
   sensor_msgs::ImageConstPtr msg = ros::topic::waitForMessage<sensor_msgs::Image>("image", nh);
   ROS_INFO("Processing new image");
-
+  
+  ros::Time start = ros::Time::now();
   cv_bridge::CvImageConstPtr cvImg = cv_bridge::toCvShare(msg);
   Mat img_undistort;
   undistort(cvImg->image, img_undistort, Kcv, distcoeffcv);
+  ROS_INFO("Image retrieval time: %f", (ros::Time::now()-start).toSec());  
+
+  start = ros::Time::now();
   currentKeyframe = new KeyframeContainer(img_undistort);
+  ROS_INFO("Descriptor extraction time: %f", (ros::Time::now()-start).toSec());  
 
   if(currentKeyframe)
   {
@@ -171,11 +177,14 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
     {
       ROS_INFO("Performing local PnP search...");
       Eigen::Matrix4f imgTf;
+      
+      start = ros::Time::now();
       if(!FindImageTfVirtualPnp(kf, currentPose, K, imgTf))
       {
         usePnp = false;
         return;
       }
+      ROS_INFO("FindImageTfVirtualPnp time: %f", (ros::Time::now()-start).toSec());  
       currentPose = imgTf;
       //std::cout << "Estimated tf: " << std::endl << imgTf << std::endl;
       //std::cout << "Actual tf: " << std::endl << kf->GetTf() << std::endl;
@@ -185,7 +194,10 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
     }
     else
     {
+      start = ros::Time::now();
       std::vector< KeyframeMatch > matches = FindImageMatches(kf, 7, isLocalized);
+      ROS_INFO("FindImageMatches time: %f", (ros::Time::now()-start).toSec());  
+
       std::vector< KeyframeMatch > goodMatches;
       std::vector< Eigen::Vector3f > goodTVecs;
 
@@ -202,7 +214,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       }
       Eigen::Matrix4f imgTf = matches[0].kfc->GetTf();//FindImageTfSfm(kf, matches, goodMatches, goodTVecs);
 
-#if 1
+#if 0
       namedWindow( "Match", WINDOW_AUTOSIZE );
       imshow("Match", matches[0].kfc->GetImage());
       waitKey(1);
@@ -1116,7 +1128,7 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
   Mat img_matches;
   drawMatches(kfc->GetImage(), kfc->GetKeypoints(), vimg, vkps, goodMatches, img_matches);
   imshow("matches", img_matches);
-  waitKey(0);
+  waitKey(1);
 #endif
 
   if(goodMatches.size() < 4)
