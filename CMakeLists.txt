@@ -25,7 +25,10 @@ find_package(TinyXML REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Eigen REQUIRED)
 find_package(PCL REQUIRED)
-find_package(OpenMP)
+find_package(OpenMP REQUIRED)
+
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -124,6 +127,7 @@ add_library(map_localize
                                   src/Triangulation.cpp
                                   src/KeyframeMatch.cpp
                                   src/MapFeatures.cpp
+                                  src/lsh.cpp
                                   src/ASiftDetector.cpp)
 
 target_link_libraries(map_localize

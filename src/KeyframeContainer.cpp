@@ -1,27 +1,33 @@
 #include "map_localize/KeyframeContainer.h"
 #include "map_localize/ASiftDetector.h"
+#include "opencv2/features2d/features2d.hpp"
 
-KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, Eigen::Matrix3f K, int minHessian) :
+KeyframeContainer::KeyframeContainer(Mat image, std::string desc_type, Eigen::Matrix4f tf, Eigen::Matrix3f K) :
   tf(tf),
   K(K),
   img(image)
 {
-#ifdef _USE_ASIFT_
-  ASiftDetector detector;
-  detector.detectAndCompute(img, keypoints, descriptors);  
-#else
-  //SurfFeatureDetector detector(minHessian);
-  //GoodFeaturesToTrackDetector detector(1500, 0.01, 1.0);
-  //SurfDescriptorExtractor extractor;
+  if(desc_type == "asift")
+  {
+    ASiftDetector detector;
+    detector.detectAndCompute(img, keypoints, descriptors, ASiftDetector::SIFT);
+  }
+  else if(desc_type == "asurf")
+  {
+    ASiftDetector detector;
+    detector.detectAndCompute(img, keypoints, descriptors, ASiftDetector::SURF);
+  }  
+  else if(desc_type == "orb")
+  {
+    OrbFeatureDetector detector;
+    detector.detect(img, keypoints);
 
-  SurfFeatureDetector detector;
-  detector.detect(img, keypoints);
-  SurfDescriptorExtractor extractor;
-  extractor.compute(img, keypoints, descriptors);
-#endif
+    OrbDescriptorExtractor extractor;
+    extractor.compute(img, keypoints, descriptors);
+  }
 }
 
-KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, Eigen::Matrix3f K, std::vector<KeyPoint>& keypoints, Mat& descriptors, int minHessian) :
+KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, Eigen::Matrix3f K, std::vector<KeyPoint>& keypoints, Mat& descriptors) :
   tf(tf),
   K(K),
   img(image),

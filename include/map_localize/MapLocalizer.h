@@ -43,7 +43,7 @@ private:
   std::vector<int> FindPlaneInPointCloud(const std::vector<pcl::PointXYZ>& pts);
   Mat GetVirtualImageFromTopic(Eigen::Matrix4f tf, Mat& depths, Mat& mask);
   Mat GenerateVirtualImage(Eigen::Matrix4f tf, Eigen::Matrix3f K, int height, int width, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud, Mat& depth, Mat& mask);
-  bool RansacPnP(std::vector<Point3f> matchPts3d, std::vector<Point2f> matchPts, Eigen::Matrix3f K, Eigen::Matrix4f tfguess, Eigen::Matrix4f& out);
+  bool RansacPnP(const std::vector<Point3f>& matchPts3d, const std::vector<Point2f>& matchPts, Eigen::Matrix3f K, Eigen::Matrix4f tfguess, Eigen::Matrix4f& out);
 
 
   void TestFindImageTfSfm();
@@ -56,7 +56,6 @@ private:
   void PlotTf(Eigen::Matrix4f tf, std::string name);
 
   void spin(const ros::TimerEvent& e);
-  void HandleImage(sensor_msgs::ImageConstPtr msg);
 
   bool WriteDescriptorsToFile(std::string filename);
   bool LoadPhotoscanFile(std::string filename, std::string desc_filename = "", bool load_descs = false);
@@ -82,6 +81,8 @@ private:
   std::string mesh_filename;
   std::string photoscan_filename;
   std::string virtual_image_source;
+  std::string pnp_descriptor_type;
+  std::string img_match_descriptor_type;
 
   ros::NodeHandle nh;
   ros::NodeHandle nh_private;

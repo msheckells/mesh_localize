@@ -17,8 +17,8 @@ using namespace cv;
 class KeyframeContainer
 {
 public:
-  KeyframeContainer(Mat image, Eigen::Matrix4f tf = Eigen::Matrix4f(), Eigen::Matrix3f K = Eigen::Matrix3f(), int minHessian = 200);
-  KeyframeContainer(Mat image, Eigen::Matrix4f tf, Eigen::Matrix3f K, std::vector<KeyPoint>& keypoints, Mat& descriptors, int minHessian = 200);
+  KeyframeContainer(Mat image, std::string desc_type = "asurf", Eigen::Matrix4f tf = Eigen::Matrix4f(), Eigen::Matrix3f K = Eigen::Matrix3f());
+  KeyframeContainer(Mat image, Eigen::Matrix4f tf, Eigen::Matrix3f K, std::vector<KeyPoint>& keypoints, Mat& descriptors);
   
   Mat GetImage();
   Mat GetDescriptors();

@@ -12,8 +12,10 @@
 
 		<param name="point_cloud_filename" type="string" value="$(find map_localize)/bin/map_points.pcd"/>
 		<param name="mesh_filename" type="string" value="$(find map_localize)/bin/map.stl"/>
-		<param name="load_descriptors" type="bool" value="false"/>
+		<param name="load_descriptors" type="bool" value="true"/>
 		<param name="descriptor_filename" type="string" value="$(find map_localize)/data/ASurfKeypointsAndDescriptors_lowres2.bin"/>
 		<param name="virtual_image_source" type="string" value="gazebo"/>
+		<param name="pnp_descriptor_type" type="string" value="orb"/>
+		<param name="img_match_descriptor_type" type="string" value="asurf"/>
 	</node>
 </launch>

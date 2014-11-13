@@ -59,7 +59,7 @@ void ASiftDetector::detectAndCompute(const Mat& img, std::vector< KeyPoint >& ke
       }
       else if(desc_type == ASiftDetector::SURF)
       {
-        SurfFeatureDetector detector;
+        SurfFeatureDetector detector(600);
         detector.detect(timg, kps, skew_mask);
   
         SurfDescriptorExtractor extractor;
