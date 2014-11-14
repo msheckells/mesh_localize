@@ -1,7 +1,8 @@
 #include "map_localize/KeyframeContainer.h"
 #include "map_localize/ASiftDetector.h"
 #include "opencv2/features2d/features2d.hpp"
-
+#include <opencv2/gpu/gpu.hpp>
+#include <opencv2/nonfree/gpu.hpp>
 KeyframeContainer::KeyframeContainer(Mat image, std::string desc_type, Eigen::Matrix4f tf, Eigen::Matrix3f K) :
   tf(tf),
   K(K),
@@ -19,11 +20,26 @@ KeyframeContainer::KeyframeContainer(Mat image, std::string desc_type, Eigen::Ma
   }  
   else if(desc_type == "orb")
   {
-    OrbFeatureDetector detector;
+    ORB orb(2000);
+    Mat mask(img.rows, img.cols, CV_8U, Scalar(255));
+    orb(img, mask, keypoints, descriptors);
+  }
+  else if(desc_type == "surf")
+  {
+    SurfFeatureDetector detector;
     detector.detect(img, keypoints);
 
-    OrbDescriptorExtractor extractor;
+    SurfDescriptorExtractor extractor;
     extractor.compute(img, keypoints, descriptors);
+    std::cout << "kps: " << keypoints.size() << std::endl; 
+  }
+  else if(desc_type == "surf_gpu")
+  {
+    std::vector<float> desc;
+    gpu::SURF_GPU surf_gpu;    
+    gpu::GpuMat kps_gpu, mask_gpu, img_gpu(image);
+    surf_gpu(img_gpu, mask_gpu, kps_gpu, descriptors_gpu);
+    surf_gpu.downloadKeypoints(kps_gpu, keypoints);
   }
 }
 
@@ -39,6 +55,11 @@ KeyframeContainer::KeyframeContainer(Mat image, Eigen::Matrix4f tf, Eigen::Matri
 Mat KeyframeContainer::GetImage()
 {
   return img;
+}
+
+gpu::GpuMat KeyframeContainer::GetGPUDescriptors()
+{
+  return descriptors_gpu;
 }
 
 Mat KeyframeContainer::GetDescriptors()

@@ -41,7 +41,7 @@ private:
   bool FindImageTfVirtualPnp(KeyframeContainer* kcv, Eigen::Matrix4f vimg, Eigen::Matrix3f vimgK, Eigen::Matrix4f& out);
   std::vector<pcl::PointXYZ> GetPointCloudFromFrames(KeyframeContainer*, KeyframeContainer*);
   std::vector<int> FindPlaneInPointCloud(const std::vector<pcl::PointXYZ>& pts);
-  Mat GetVirtualImageFromTopic(Eigen::Matrix4f tf, Mat& depths, Mat& mask);
+  Mat GetVirtualImageFromTopic(Mat& depths, Mat& mask);
   Mat GenerateVirtualImage(Eigen::Matrix4f tf, Eigen::Matrix3f K, int height, int width, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud, Mat& depth, Mat& mask);
   bool RansacPnP(const std::vector<Point3f>& matchPts3d, const std::vector<Point2f>& matchPts, Eigen::Matrix3f K, Eigen::Matrix4f tfguess, Eigen::Matrix4f& out);
 
@@ -56,6 +56,10 @@ private:
   void PlotTf(Eigen::Matrix4f tf, std::string name);
 
   void spin(const ros::TimerEvent& e);
+  void HandleImage(const sensor_msgs::ImageConstPtr& msg);
+  void HandleVirtualImage(const sensor_msgs::ImageConstPtr& msg);
+  void HandleVirtualDepth(const sensor_msgs::ImageConstPtr& msg);
+  void UpdateVirtualSensorState(Eigen::Matrix4f tf);
 
   bool WriteDescriptorsToFile(std::string filename);
   bool LoadPhotoscanFile(std::string filename, std::string desc_filename = "", bool load_descs = false);
@@ -65,14 +69,19 @@ private:
   std::vector<KeyframeContainer*> keyframes;
   KeyframeContainer* currentKeyframe;
   
-
+  Mat current_virtual_image;
+  sensor_msgs::ImageConstPtr current_virtual_depth_msg;
 
   std::vector<Eigen::Vector3f> positionList;
   Eigen::Matrix4f currentPose;
   bool isLocalized;
-  bool usePnp;
+  bool usePnp; 
+  bool get_virtual_image;
+  bool get_virtual_depth;
+  int numPnpRetrys;
   int numLocalizeRetrys;
 
+  ros::Time spin_time;
 
   pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr map_cloud;
   MapFeatures map_features;
@@ -97,10 +106,9 @@ private:
   ros::Publisher pointcloud_pub;
   tf::TransformBroadcaster br;
 
-  ros::Subscriber image_subscriber;
-  ros::Subscriber virtual_image_subscriber;
-  ros::Subscriber virtual_depth_subscriber;
-  ros::Subscriber virtual_caminfo_subscriber;
+  ros::Subscriber image_sub;
+  ros::Subscriber virtual_image_sub;
+  ros::Subscriber virtual_depth_sub;
 
   ros::Timer timer;
 

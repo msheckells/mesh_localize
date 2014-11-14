@@ -1,8 +1,4 @@
 <launch>
-        <!-- Start only gzserver --> 
-	<arg name="world_name" default="$(find map_localize)/worlds/campus.world"/>
-	<node name="gazebo" pkg="gazebo_ros" type="gzserver" respawn="false" output="screen"  args="$(arg world_name)" />
-
         <!-- Start map_localize_node -->
 	<node name="map_localize" pkg="map_localize" type="map_localize_node" output="screen">
 		<remap from="virtual_caminfo" to="/kinect/camera_info" />
@@ -15,7 +11,7 @@
 		<param name="load_descriptors" type="bool" value="true"/>
 		<param name="descriptor_filename" type="string" value="$(find map_localize)/data/ASurfKeypointsAndDescriptors_lowres2.bin"/>
 		<param name="virtual_image_source" type="string" value="gazebo"/>
-		<param name="pnp_descriptor_type" type="string" value="orb"/>
+		<param name="pnp_descriptor_type" type="string" value="surf_gpu"/>
 		<param name="img_match_descriptor_type" type="string" value="asurf"/>
 	</node>
 </launch>

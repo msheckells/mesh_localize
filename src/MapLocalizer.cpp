@@ -11,6 +11,10 @@
 #include <unsupported/Eigen/MatrixFunctions>
 #include <cv_bridge/cv_bridge.h>
 
+#include <opencv2/gpu/gpu.hpp>
+#include <opencv2/nonfree/gpu.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+
 #include "map_localize/FindCameraMatrices.h"
 #include "map_localize/Triangulation.h"
 #include "map_localize/ASiftDetector.h"
@@ -33,6 +37,9 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     currentKeyframe(NULL),
     isLocalized(false),
     usePnp(false),
+    get_virtual_image(false),
+    get_virtual_depth(false),
+    numPnpRetrys(0),
     numLocalizeRetrys(0),
     nh(nh),
     nh_private(nh_private)
@@ -102,10 +109,15 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   path_marker_pub = nh.advertise<visualization_msgs::Marker>("/map_localize/estimated_path", 1);
   pointcloud_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZ> >("/map_localize/pointcloud", 1);
 
+  image_sub = nh.subscribe<sensor_msgs::Image>("image", 1, &MapLocalizer::HandleImage, this, ros::TransportHints().tcpNoDelay());
+
+
   if(virtual_image_source == "gazebo")
   {
     ROS_INFO("Using Gazebo for virtual image generation");
     gazebo_client = nh.serviceClient<gazebo_msgs::SetLinkState>("/gazebo/set_link_state");
+    virtual_image_sub = nh.subscribe<sensor_msgs::Image>("virtual_image", 1, &MapLocalizer::HandleVirtualImage, this, ros::TransportHints().tcpNoDelay());
+    virtual_depth_sub = nh.subscribe<sensor_msgs::Image>("virtual_depth", 1, &MapLocalizer::HandleVirtualDepth, this, ros::TransportHints().tcpNoDelay());
 
     ROS_INFO("Waiting for camera calibration info...");
   
@@ -122,6 +134,7 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     ROS_INFO("Calibration info received");
   }
 
+  spin_time = ros::Time::now();
   timer = nh_private.createTimer(ros::Duration(0.1), &MapLocalizer::spin, this);
 }
 
@@ -134,32 +147,104 @@ MapLocalizer::~MapLocalizer()
   keyframes.clear();
 }
 
+void MapLocalizer::HandleImage(const sensor_msgs::ImageConstPtr& msg)
+{
+  if(!currentKeyframe)
+  {
+    ROS_INFO("Processing new image");
+ 
+    if(usePnp && virtual_image_source == "gazebo")
+    {
+      get_virtual_depth = true;
+      get_virtual_image = true;
+    }
+
+    ros::Time start = ros::Time::now();
+    cv_bridge::CvImageConstPtr cvImg = cv_bridge::toCvShare(msg);
+    Mat img_undistort;
+    undistort(cvImg->image, img_undistort, Kcv, distcoeffcv);
+    ROS_INFO("Image copy time: %f", (ros::Time::now()-start).toSec());  
+  
+    start = ros::Time::now();
+    if(usePnp)
+    {
+      currentKeyframe = new KeyframeContainer(img_undistort, pnp_descriptor_type);
+    }
+    else
+    {
+      currentKeyframe = new KeyframeContainer(img_undistort, img_match_descriptor_type);
+    }
+    ROS_INFO("Descriptor extraction time: %f", (ros::Time::now()-start).toSec());  
+  }
+}
+
+void MapLocalizer::HandleVirtualImage(const sensor_msgs::ImageConstPtr& msg)
+{
+  if(get_virtual_image)
+  {
+    ROS_INFO("Got virtual image");
+    current_virtual_image = cv_bridge::toCvCopy(msg)->image;
+    get_virtual_image = false;
+  }
+}
+
+void MapLocalizer::HandleVirtualDepth(const sensor_msgs::ImageConstPtr& msg)
+{
+  if(get_virtual_depth)
+  {
+    ROS_INFO("Got virtual depth");
+    current_virtual_depth_msg = msg;
+    get_virtual_depth = false;
+  }
+}
+
+void MapLocalizer::UpdateVirtualSensorState(Eigen::Matrix4f tf)
+{
+  gazebo_msgs::SetLinkState vimg_state_srv;
+  gazebo_msgs::LinkState vimg_state_msg;
+  vimg_state_msg.link_name = "kinect::link";
+
+  vimg_state_msg.pose.position.x = tf(0,3);
+  vimg_state_msg.pose.position.y = tf(1,3);
+  vimg_state_msg.pose.position.z = tf(2,3);
+
+  Eigen::Matrix3f rot = tf.block<3,3>(0,0)*Eigen::AngleAxisf(-M_PI/2, Eigen::Vector3f::UnitY())*Eigen::AngleAxisf(M_PI/2, Eigen::Vector3f::UnitX());
+  Eigen::Quaternionf q(rot);
+  q.normalize();
+  vimg_state_msg.pose.orientation.x = q.x();
+  vimg_state_msg.pose.orientation.y = q.y();
+  vimg_state_msg.pose.orientation.z = q.z();
+  vimg_state_msg.pose.orientation.w = q.w();
+  
+  vimg_state_msg.twist.linear.x = 0;
+  vimg_state_msg.twist.linear.y = 0;
+  vimg_state_msg.twist.linear.z = 0;
+  vimg_state_msg.twist.angular.x = 0;
+  vimg_state_msg.twist.angular.y = 0;
+  vimg_state_msg.twist.angular.z = 0;
+
+  vimg_state_srv.request.link_state = vimg_state_msg;
+
+  ros::Time start = ros::Time::now();
+  if(!gazebo_client.call(vimg_state_srv))
+  {
+    ROS_ERROR("Failed to contact gazebo set_link_state service");
+  }
+  ROS_INFO("set_link_state time: %f", (ros::Time::now()-start).toSec());
+}
+
 void MapLocalizer::spin(const ros::TimerEvent& e)
 {
   PublishMap();
 
-  ROS_INFO("Waiting for new image...");
-  sensor_msgs::ImageConstPtr msg = ros::topic::waitForMessage<sensor_msgs::Image>("image", nh);
-  ROS_INFO("Processing new image");
+  //ROS_INFO("Waiting for new image...");
+  //ros::Time start = ros::Time::now();
+  //sensor_msgs::ImageConstPtr msg = ros::topic::waitForMessage<sensor_msgs::Image>("image", nh);
+  //ROS_INFO("Image retrieval time: %f", (ros::Time::now()-start).toSec());  
   
-  ros::Time start = ros::Time::now();
-  cv_bridge::CvImageConstPtr cvImg = cv_bridge::toCvShare(msg);
-  Mat img_undistort;
-  undistort(cvImg->image, img_undistort, Kcv, distcoeffcv);
-  ROS_INFO("Image retrieval time: %f", (ros::Time::now()-start).toSec());  
 
-  start = ros::Time::now();
-  if(usePnp)
-  {
-    currentKeyframe = new KeyframeContainer(img_undistort, pnp_descriptor_type);
-  }
-  else
-  {
-    currentKeyframe = new KeyframeContainer(img_undistort, img_match_descriptor_type);
-  }
-  ROS_INFO("Descriptor extraction time: %f", (ros::Time::now()-start).toSec());  
 
-  if(currentKeyframe)
+  if(currentKeyframe && !get_virtual_image && !get_virtual_depth)
   {
     //Mat test = imread("/home/matt/uav_image_data/run11/frame0029.jpg", CV_LOAD_IMAGE_GRAYSCALE );
     //KeyframeContainer* kf = new KeyframeContainer(test, Eigen::Matrix4f());
@@ -173,14 +258,23 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       ROS_INFO("Performing local PnP search...");
       Eigen::Matrix4f imgTf;
       
-      start = ros::Time::now();
+      ros::Time start = ros::Time::now();
       if(!FindImageTfVirtualPnp(kf, currentPose, K, imgTf))
       {
-        usePnp = false;
+        numPnpRetrys++;
+        if(numPnpRetrys > 1)
+        {
+          numPnpRetrys = 0;
+          usePnp = false;
+        }
+        delete currentKeyframe;
+        currentKeyframe = NULL;
         return;
       }
+      numPnpRetrys = 0;
       ROS_INFO("FindImageTfVirtualPnp time: %f", (ros::Time::now()-start).toSec());  
       currentPose = imgTf;
+      UpdateVirtualSensorState(currentPose);
       //std::cout << "Estimated tf: " << std::endl << imgTf << std::endl;
       //std::cout << "Actual tf: " << std::endl << kf->GetTf() << std::endl;
       positionList.push_back(imgTf.block<3,1>(0,3));
@@ -189,41 +283,28 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
     }
     else
     {
-      start = ros::Time::now();
+      ros::Time start = ros::Time::now();
       std::vector< KeyframeMatch > matches = FindImageMatches(kf, 7, isLocalized);
       ROS_INFO("FindImageMatches time: %f", (ros::Time::now()-start).toSec());  
-
-      std::vector< KeyframeMatch > goodMatches;
-      std::vector< Eigen::Vector3f > goodTVecs;
-
-      for(unsigned int i = 0; i < matches.size(); i++)
-      {
-        if(matches[i].matchKps1.size() == 0 || matches[i].matchKps2.size() == 0)
-        {
-          ROS_INFO("Match had no keypoints");
-        
-          delete currentKeyframe;
-          currentKeyframe = NULL;
-          return;
-        }
-      }
-      Eigen::Matrix4f imgTf = matches[0].kfc->GetTf();//FindImageTfSfm(kf, matches, goodMatches, goodTVecs);
 
 #if 0
       namedWindow( "Match", WINDOW_AUTOSIZE );
       imshow("Match", matches[0].kfc->GetImage());
       waitKey(1);
 #endif
+      // TODO: use Pnp to refine pose before switching to other descriptor 
 
+      // TODO: use a better criterion than num matches to find best match. Filter matches for inliers using Fundamental matrix or kVLD
       if(matches[0].matchKps1.size() >= 40)
       {
         ROS_INFO("Found image tf");
         usePnp = true;
         isLocalized = true;
         numLocalizeRetrys = 0;
-        currentPose = imgTf;
-        positionList.push_back(imgTf.block<3,1>(0,3));
-        PublishTfViz(imgTf, kf->GetTf());
+        currentPose = matches[0].kfc->GetTf();
+        UpdateVirtualSensorState(currentPose);
+        positionList.push_back(currentPose.block<3,1>(0,3));
+        PublishTfViz(currentPose, kf->GetTf());
         //PublishSfmMatchViz(goodMatches, goodTVecs);
       }
       else
@@ -236,7 +317,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       }
     }
 #else
-    // ASift localization with local search refinement
+    // ASift localization with local search refinement.  Uses fundamental matrix instead of Pnp
     std::vector< KeyframeMatch > matches = FindImageMatches(kf, 7);//, isLocalized); // Only do local search if position is known
     std::vector< KeyframeMatch > goodMatches;
     std::vector< Eigen::Vector3f > goodTVecs;
@@ -315,6 +396,9 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
 #endif
     // For now just delete currentKeyframe, should probably add to keyframe list 
     // if tf estimate is good enough
+    ROS_INFO("Spin time: %f", (ros::Time::now() - spin_time).toSec());
+    spin_time = ros::Time::now();
+
     delete currentKeyframe;
     currentKeyframe = NULL;
   }
@@ -607,53 +691,13 @@ void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImg
 
 }
 
-Mat MapLocalizer::GetVirtualImageFromTopic(Eigen::Matrix4f tf, Mat& depths, Mat& mask)
+Mat MapLocalizer::GetVirtualImageFromTopic(Mat& depths, Mat& mask)
 {
-  Mat vimg;
-
-  gazebo_msgs::SetLinkState vimg_state_srv;
-  gazebo_msgs::LinkState vimg_state_msg;
-  vimg_state_msg.link_name = "kinect::link";
-
-  vimg_state_msg.pose.position.x = tf(0,3);
-  vimg_state_msg.pose.position.y = tf(1,3);
-  vimg_state_msg.pose.position.z = tf(2,3);
-
-  Eigen::Matrix3f rot = tf.block<3,3>(0,0)*Eigen::AngleAxisf(-M_PI/2, Eigen::Vector3f::UnitY())*Eigen::AngleAxisf(M_PI/2, Eigen::Vector3f::UnitX());
-  Eigen::Quaternionf q(rot);
-  q.normalize();
-  vimg_state_msg.pose.orientation.x = q.x();
-  vimg_state_msg.pose.orientation.y = q.y();
-  vimg_state_msg.pose.orientation.z = q.z();
-  vimg_state_msg.pose.orientation.w = q.w();
-  
-  vimg_state_msg.twist.linear.x = 0;
-  vimg_state_msg.twist.linear.y = 0;
-  vimg_state_msg.twist.linear.z = 0;
-  vimg_state_msg.twist.angular.x = 0;
-  vimg_state_msg.twist.angular.y = 0;
-  vimg_state_msg.twist.angular.z = 0;
-
-  vimg_state_srv.request.link_state = vimg_state_msg;
-
-  if(!gazebo_client.call(vimg_state_srv))
-  {
-    ROS_ERROR("Failed to contact gazebo set_link_state service");
-    return vimg;
-  }
- 
-  // TODO: Fix the queue size, this is hacky 
-  ros::topic::waitForMessage<sensor_msgs::Image>("virtual_image", nh);
-  sensor_msgs::ImageConstPtr img_msg = ros::topic::waitForMessage<sensor_msgs::Image>("virtual_image", nh);
-  sensor_msgs::ImageConstPtr depth_msg = ros::topic::waitForMessage<sensor_msgs::Image>("virtual_depth", nh);
-  cv_bridge::CvImageConstPtr cvImg = cv_bridge::toCvCopy(img_msg);
-  vimg = cvImg->image;
-  
   depths = Mat(virtual_height, virtual_width, CV_32F, Scalar(0));
   mask = Mat(virtual_height, virtual_width, CV_8U, Scalar(0));
 
   //std::cout << "step: " << depth_msg->step << " encoding: " << depth_msg->encoding << " bigendian: " << (depth_msg->is_bigendian ? 1 : 0) << std::endl;
-
+  ros::Time start = ros::Time::now();
   for(int i = 0; i < virtual_height; i++)
   {
     for(int j = 0; j < virtual_width; j++)
@@ -663,10 +707,10 @@ Mat MapLocalizer::GetVirtualImageFromTopic(Eigen::Matrix4f tf, Mat& depths, Mat&
         uchar b[4];
       } u;
  
-      int index = i*depth_msg->step + j*(depth_msg->step/depth_msg->width);
+      int index = i*current_virtual_depth_msg->step + j*(current_virtual_depth_msg->step/current_virtual_depth_msg->width);
       for(int k = 0; k < 4; k++)
       {
-        u.b[k] = depth_msg->data[index+k];
+        u.b[k] = current_virtual_depth_msg->data[index+k];
       }
       if(u.f == u.f) // check if valid
       {
@@ -675,8 +719,9 @@ Mat MapLocalizer::GetVirtualImageFromTopic(Eigen::Matrix4f tf, Mat& depths, Mat&
       }
     }
   }
+  ROS_INFO("VirtualImageFromTopic: parse depth time: %f", (ros::Time::now()-start).toSec());
 
-  return vimg;
+  return current_virtual_image;
 }
 
 Mat MapLocalizer::GenerateVirtualImage(Eigen::Matrix4f tf, Eigen::Matrix3f K, int height, int width, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud, Mat& depths, Mat& mask)
@@ -1039,7 +1084,7 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
   ros::Time start = ros::Time::now();
   if(virtual_image_source == "gazebo")
   {
-    vimg = GetVirtualImageFromTopic(vimgTf, depth, mask);
+    vimg = GetVirtualImageFromTopic(depth, mask);
   }
   else if(virtual_image_source == "point_cloud")
   {
@@ -1072,47 +1117,72 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
   // Find features in virtual image
   std::vector<KeyPoint> vkps;
   Mat vdesc;
+  std::vector < std::vector< DMatch > > matches;
+  
+  // Find image features matches between kfc and vimg
+  double matchRatio;
 
   start = ros::Time::now();
   if(pnp_descriptor_type == "asift")
   {
     ASiftDetector detector;
     detector.detectAndCompute(vimg, vkps, vdesc, mask, ASiftDetector::SIFT);
+
+    matchRatio = 0.7;
+    FlannBasedMatcher matcher;
+    matcher.knnMatch( kfc->GetDescriptors(), vdesc, matches, 2 );
   }
   else if(pnp_descriptor_type == "asurf")
   {
     ASiftDetector detector;
     detector.detectAndCompute(vimg, vkps, vdesc, mask, ASiftDetector::SURF);
+
+    matchRatio = 0.7;
+    FlannBasedMatcher matcher;
+    matcher.knnMatch( kfc->GetDescriptors(), vdesc, matches, 2 );
   }
   else if(pnp_descriptor_type == "orb")
   {
-    OrbFeatureDetector detector;
-    detector.detect(vimg, vkps, mask);
+    ORB orb(2000);
+    orb(vimg, mask, vkps, vdesc);
 
-    OrbDescriptorExtractor extractor;
-    extractor.compute(vimg, vkps, vdesc);
-  }
-  ROS_INFO("VirtualPnP: find keypoints time: %f", (ros::Time::now()-start).toSec());
+    std::cout << "vkps: " << vkps.size() << std::endl;
 
-  // Find image features matches between kfc and vimg
-  double matchRatio;
-  std::vector < std::vector< DMatch > > matches;
-  
-  start = ros::Time::now();
-  if(pnp_descriptor_type == "orb")
-  {
     matchRatio = 0.8;
     BFMatcher matcher(NORM_HAMMING);
     //lsh::LshMatcher matcher;
     matcher.knnMatch( kfc->GetDescriptors(), vdesc, matches, 2 );
   }
-  else
+  else if(pnp_descriptor_type == "surf")
   {
+    SurfFeatureDetector detector;
+    detector.detect(vimg, vkps, mask);
+
+    SurfDescriptorExtractor extractor;
+    extractor.compute(vimg, vkps, vdesc);
+
     matchRatio = 0.7;
     FlannBasedMatcher matcher;
     matcher.knnMatch( kfc->GetDescriptors(), vdesc, matches, 2 );
   }
-  ROS_INFO("VirtualPnP: match time: %f", (ros::Time::now()-start).toSec());
+  else if(pnp_descriptor_type == "surf_gpu")
+  {
+    gpu::SURF_GPU surf_gpu;
+   
+    cvtColor(vimg, vimg, CV_BGR2GRAY);
+    gpu::GpuMat vdesc_gpu, vkps_gpu, mask_gpu(mask), vimg_gpu(vimg);
+    
+    surf_gpu(vimg_gpu, mask_gpu, vkps_gpu, vdesc_gpu);
+    surf_gpu.downloadKeypoints(vkps_gpu, vkps);   
+
+    std::cout << "vkps: " << vkps.size() << std::endl;
+ 
+    matchRatio = 0.8;
+    gpu::BFMatcher_GPU matcher;
+    matcher.knnMatch(kfc->GetGPUDescriptors(), vdesc_gpu, matches, 2);  
+  }
+
+  ROS_INFO("VirtualPnP: find keypoints/matches time: %f", (ros::Time::now()-start).toSec());
 
   std::vector< DMatch > goodMatches;
   std::vector< DMatch > allMatches;
@@ -1128,6 +1198,11 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
     if(matches[j][0].distance < matchRatio*matches[j][1].distance)
     {
       // Back-project point to 3d
+      if(matches[j][0].trainIdx >= vkps.size() || matches[j][0].queryIdx >= kfc->GetKeypoints().size())
+      {
+        std::cout <<  "Index mismatch? AHH: " << matches[j][0].trainIdx << " " << matches[j][0].queryIdx << " " << vkps.size() << " " << kfc->GetKeypoints().size() << std::endl;
+      }
+
       Point2f kp = vkps[matches[j][0].trainIdx].pt;
       Eigen::Vector3f hkp(kp.x, kp.y, 1);
       Eigen::Vector3f backproj = vimgK.inverse()*hkp;
@@ -1145,12 +1220,12 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
   } 
   ROS_INFO("VirtualPnP: match filter time: %f", (ros::Time::now()-start).toSec());
 
-#if 0  
+#if 0 
   //PublishPointCloud(matchPts3d_pcl);
   Mat img_matches;
   drawMatches(kfc->GetImage(), kfc->GetKeypoints(), vimg, vkps, goodMatches, img_matches);
   imshow("matches", img_matches);
-  waitKey(1);
+  waitKey(0);
 #endif
 
   if(goodMatches.size() < 4)
@@ -1175,6 +1250,7 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
 
 
   Eigen::Matrix4f tfran;
+  //solvePnPRansac(matchPts3d, matchPts, Kcv, 
   if(!RansacPnP(matchPts3d, matchPts, vimgK, vimgTf.inverse(), tfran))
   {
     return false;
@@ -1196,8 +1272,8 @@ bool MapLocalizer::RansacPnP(const std::vector<Point3f>& matchPts3d, const std::
   t = (Mat_<double>(3,1) << tfguess(0,3), tfguess(1,3), tfguess(2,3));
   
   // RANSAC PnP
-  const int niter = 50; // Assumes about 45% outliers
-  const double reprojThresh = 4.0; // in pixels
+  const int niter = 800;//50; // Assumes about 45% outliers
+  const double reprojThresh = 5.0; // in pixels
   const int m = 4; // points per sample
   const int inlier_ratio_cutoff = 0.4; 
   std::vector<int> ind;
@@ -1259,7 +1335,7 @@ bool MapLocalizer::RansacPnP(const std::vector<Point3f>& matchPts3d, const std::
       } 
       if(bestInliersIdx.size() > inlier_ratio_cutoff*matchPts.size())
       {
-        std::cout << "Pnp abort n=" << i << std::endl;
+        //std::cout << "Pnp abort n=" << i << std::endl;
         abort = true;  
         #pragma omp flush (abort)
       }
@@ -1355,7 +1431,7 @@ std::vector< KeyframeMatch > MapLocalizer::FindImageMatches(KeyframeContainer* i
 
   if(usePos)
   {
-    ROS_INFO("Peforming local match search...");
+    ROS_INFO("Performing local match search...");
     searchBound = 5*k*pow(1.8, numLocalizeRetrys);
     if(searchBound >= keyframes.size())
     {
@@ -1372,6 +1448,7 @@ std::vector< KeyframeMatch > MapLocalizer::FindImageMatches(KeyframeContainer* i
     ROS_INFO("Performing global match search...");
   }
   // Find potential frame matches
+  #pragma omp parallel for
   for(unsigned int i = 0; i < searchBound; i++)
   {
     //std::cout << i/double(keyframes.size()) << std::endl;
@@ -1403,7 +1480,10 @@ std::vector< KeyframeMatch > MapLocalizer::FindImageMatches(KeyframeContainer* i
     if(goodMatches.size() >= numMatchThresh*matches.size())
     {
       //std:: cout << "Found Match!" << std::endl;
-      kfMatches.push_back(KeyframeMatch(keyframes[i], goodMatches, allMatches, matchPts1, matchPts2, matchKps1, matchKps2));
+      #pragma omp critical
+      {
+        kfMatches.push_back(KeyframeMatch(keyframes[i], goodMatches, allMatches, matchPts1, matchPts2, matchKps1, matchKps2));
+      }
     }
   }
 

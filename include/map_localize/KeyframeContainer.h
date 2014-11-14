@@ -7,6 +7,7 @@
 #include <opencv2/legacy/legacy.hpp>
 #include <opencv2/nonfree/features2d.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/gpu/gpu.hpp>
 #include <Eigen/Core>
 #include <Eigen/Dense>
 
@@ -22,6 +23,7 @@ public:
   
   Mat GetImage();
   Mat GetDescriptors();
+  gpu::GpuMat GetGPUDescriptors();
   std::vector<KeyPoint> GetKeypoints();
   Eigen::Matrix4f GetTf();
   Eigen::Matrix3f GetK();
@@ -32,6 +34,7 @@ private:
   Mat img;
   std::vector<KeyPoint> keypoints;
   Mat descriptors;
+  gpu::GpuMat descriptors_gpu;
 };
 
 #endif
