@@ -1,0 +1,17 @@
+<launch>
+        <!-- Start map_localize_node -->
+	<node name="map_localize" pkg="map_localize" type="map_localize_node" output="screen">
+		<remap from="virtual_caminfo" to="/kinect/camera_info" />
+		<remap from="virtual_image" to="/kinect/image_raw" />
+		<remap from="virtual_depth" to="/kinect/depth/image_raw" />
+		<remap from="image" to="/camera/image_raw" />
+
+		<param name="mesh_filename" type="string" value="/bin/lab_cage.stl"/>
+		<param name="load_descriptors" type="bool" value="true"/>
+		<param name="descriptor_filename" type="string" value="$(find map_localize)/data/lab_cage_ASurfKeypointsAndDescriptors_lowres2.bin"/>
+		<param name="virtual_image_source" type="string" value="gazebo"/>
+		<param name="pnp_descriptor_type" type="string" value="surf_gpu"/>
+		<param name="img_match_descriptor_type" type="string" value="asurf"/>
+		<param name="photoscan_filename" type="string" value="/home/matt/Documents/lab_cage_doc.xml"/>
+	</node>
+</launch>

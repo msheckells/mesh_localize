@@ -29,8 +29,16 @@ class MapLocalizer
     }
   };
 
+  enum LocalizeState
+  {
+    INIT,
+    INIT_PNP,
+    LOCAL_INIT,
+    PNP
+  } localize_state;
 
 public:
+
   MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private);
   ~MapLocalizer();
 
@@ -38,7 +46,7 @@ private:
   std::vector< KeyframeMatch > FindImageMatches(KeyframeContainer* img, int k, bool usePos = false);
   Eigen::Matrix4f FindImageTfSfm(KeyframeContainer* img, std::vector< KeyframeMatch >, std::vector< KeyframeMatch >& goodMatches, std::vector< Eigen::Vector3f >& goodTVecs);
   Eigen::Matrix4f FindImageTfPnp(KeyframeContainer* kcv, const MapFeatures& mf);
-  bool FindImageTfVirtualPnp(KeyframeContainer* kcv, Eigen::Matrix4f vimg, Eigen::Matrix3f vimgK, Eigen::Matrix4f& out);
+  bool FindImageTfVirtualPnp(KeyframeContainer* kcv, Eigen::Matrix4f vimgTf, Eigen::Matrix3f vimgK, Eigen::Matrix4f& out, std::string vdesc_type);
   std::vector<pcl::PointXYZ> GetPointCloudFromFrames(KeyframeContainer*, KeyframeContainer*);
   std::vector<int> FindPlaneInPointCloud(const std::vector<pcl::PointXYZ>& pts);
   Mat GetVirtualImageFromTopic(Mat& depths, Mat& mask);
@@ -74,8 +82,6 @@ private:
 
   std::vector<Eigen::Vector3f> positionList;
   Eigen::Matrix4f currentPose;
-  bool isLocalized;
-  bool usePnp; 
   bool get_virtual_image;
   bool get_virtual_depth;
   int numPnpRetrys;
@@ -92,6 +98,7 @@ private:
   std::string virtual_image_source;
   std::string pnp_descriptor_type;
   std::string img_match_descriptor_type;
+  bool show_pnp_matches;
 
   ros::NodeHandle nh;
   ros::NodeHandle nh_private;
@@ -113,11 +120,15 @@ private:
   ros::Timer timer;
 
   Eigen::Matrix3f K;
+  Eigen::Matrix3f map_K;
   Eigen::Matrix3f virtual_K;
   Eigen::VectorXf distcoeff;
+  Eigen::VectorXf map_distcoeff;
   Matx33d Kcv;
+  Matx33d map_Kcv;
   Matx33d virtual_Kcv;
   Mat distcoeffcv;
+  Mat map_distcoeffcv;
   int virtual_height;
   int virtual_width;
 };

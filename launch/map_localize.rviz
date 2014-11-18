@@ -10,7 +10,6 @@ Panels:
         - /Map1
         - /Map1/Status1
         - /Estimated Location1
-        - /Estimated Location1/Status1
         - /Estimated Path1
         - /Matched Points1
       Splitter Ratio: 0.5
@@ -70,19 +69,19 @@ Visualization Manager:
       Update Interval: 0
       Value: false
     - Class: rviz/Marker
-      Enabled: false
+      Enabled: true
       Marker Topic: /map_localize/map
       Name: Map
       Namespaces:
-        {}
-      Queue Size: 100
-      Value: false
+        map_localize: true
+      Queue Size: 0
+      Value: true
     - Class: rviz/Marker
       Enabled: true
       Marker Topic: /map_localize/estimated_position
       Name: Estimated Location
       Namespaces:
-        {}
+        map_localize: true
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
@@ -90,7 +89,7 @@ Visualization Manager:
       Marker Topic: /map_localize/estimated_path
       Name: Estimated Path
       Namespaces:
-        {}
+        map_localize: true
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
@@ -125,22 +124,22 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 25.081
+      Distance: 12.0392
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.777511
-        Y: 0.689927
-        Z: -0.445833
+        X: -4.74798
+        Y: -2.38068
+        Z: -0.57591
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.475204
+      Pitch: 0.335204
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.29215
+      Yaw: 0.422133
     Saved: ~
 Window Geometry:
   Displays:
@@ -158,5 +157,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 927
-  X: 986
+  X: 979
   Y: 24

@@ -1,4 +1,4 @@
 <launch>
-	<arg name="world_name" default="$(find map_localize)/worlds/campus.world"/>
+	<arg name="world_name" default="$(find map_localize)/worlds/lab_cage.world"/>
 	<node name="gazebo" pkg="gazebo_ros" type="gzserver" respawn="false" output="screen"  args="$(arg world_name)" />
 </launch>

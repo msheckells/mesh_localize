@@ -1,0 +1,68 @@
+<?xml version="1.0"?>
+<sdf version="1.4">
+  <world name="campus">
+    <scene>
+      <ambient>1.0 1.0 1.0 1</ambient>
+      <background>0.3 0.3 0.3 1.0</background>
+      <shadows>false</shadows>
+    </scene>
+    <!-- Ground Plane -->
+    <!--include>
+      <uri>model://ground_plane</uri>
+    </include-->
+    <include>
+      <uri>model://lab_cage</uri>
+      <pose> 0 0 0 0 0 0 </pose>
+    </include>
+    <include>
+      <uri>model://kinect</uri>
+      <pose> 0 0 0 0 0 0 </pose>
+    </include>
+    <!-- Light Source Copied from sun -->
+    
+    <light type="directional" name="sun">
+      <pose>10 -15 15 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>1 2 1</direction>
+    </light>
+    <!--
+    <light type="directional" name="sun2">
+      <pose>20 -20 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>1 2 1</direction>
+    </light>
+    <light type="directional" name="sun3">
+      <pose>0 -10 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>1 2 1</direction>
+    </light>
+    -->
+    <!-- No gravity -->
+    <physics type="ode">
+      <gravity>0 0 0</gravity>
+    </physics>
+  
+   
+  </world>
+</sdf>

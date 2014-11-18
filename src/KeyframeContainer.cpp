@@ -20,7 +20,7 @@ KeyframeContainer::KeyframeContainer(Mat image, std::string desc_type, Eigen::Ma
   }  
   else if(desc_type == "orb")
   {
-    ORB orb(2000);
+    ORB orb(1000);
     Mat mask(img.rows, img.cols, CV_8U, Scalar(255));
     orb(img, mask, keypoints, descriptors);
   }
@@ -35,7 +35,6 @@ KeyframeContainer::KeyframeContainer(Mat image, std::string desc_type, Eigen::Ma
   }
   else if(desc_type == "surf_gpu")
   {
-    std::vector<float> desc;
     gpu::SURF_GPU surf_gpu;    
     gpu::GpuMat kps_gpu, mask_gpu, img_gpu(image);
     surf_gpu(img_gpu, mask_gpu, kps_gpu, descriptors_gpu);
