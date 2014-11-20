@@ -8,6 +8,7 @@
 
 		<param name="mesh_filename" type="string" value="/bin/lab_cage.stl"/>
 		<param name="load_descriptors" type="bool" value="true"/>
+		<param name="show_pnp_matches" type="bool" value="false"/>
 		<param name="descriptor_filename" type="string" value="$(find map_localize)/data/lab_cage_ASurfKeypointsAndDescriptors_lowres2.bin"/>
 		<param name="virtual_image_source" type="string" value="gazebo"/>
 		<param name="pnp_descriptor_type" type="string" value="surf_gpu"/>

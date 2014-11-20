@@ -64,7 +64,7 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   if(!nh_private.getParam("virtual_image_source", virtual_image_source))
     virtual_image_source = "point_cloud";
   if(!nh_private.getParam("pnp_descriptor_type", pnp_descriptor_type))
-    pnp_descriptor_type = "asurf";
+    pnp_descriptor_type = "orb";
   if(!nh_private.getParam("img_match_descriptor_type", img_match_descriptor_type))
     img_match_descriptor_type = "asurf";
   
@@ -113,7 +113,8 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   //std::cout << "done" << std::endl;
 
   std::srand(time(NULL));
-  
+ 
+  estimated_pose_pub = nh.advertise<geometry_msgs::Pose>("/map_localize/estimated_pose", 1);
   map_marker_pub = nh.advertise<visualization_msgs::Marker>("/map_localize/map", 1);
   match_marker_pub = nh.advertise<visualization_msgs::Marker>("/map_localize/match_points", 1);
   tvec_marker_pub = nh.advertise<visualization_msgs::MarkerArray>("/map_localize/t_vectors", 1);
@@ -248,6 +249,25 @@ void MapLocalizer::UpdateVirtualSensorState(Eigen::Matrix4f tf)
   ROS_INFO("set_link_state time: %f", (ros::Time::now()-start).toSec());
 }
 
+void MapLocalizer::PublishPose(Eigen::Matrix4f tf)
+{
+  geometry_msgs::Pose pose;
+  
+  pose.position.x = tf(0,3);
+  pose.position.y = tf(1,3);
+  pose.position.z = tf(2,3);
+
+  Eigen::Matrix3f rot = tf.block<3,3>(0,0)*Eigen::AngleAxisf(-M_PI/2, Eigen::Vector3f::UnitY())*Eigen::AngleAxisf(M_PI/2, Eigen::Vector3f::UnitX());
+  Eigen::Quaternionf q(rot);
+  q.normalize();
+  pose.orientation.x = q.x();
+  pose.orientation.y = q.y();
+  pose.orientation.z = q.z();
+  pose.orientation.w = q.w();
+
+  estimated_pose_pub.publish(pose);
+}
+
 void MapLocalizer::spin(const ros::TimerEvent& e)
 {
   PublishMap();
@@ -290,6 +310,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       ROS_INFO("FindImageTfVirtualPnp time: %f", (ros::Time::now()-start).toSec());  
       currentPose = imgTf;
       UpdateVirtualSensorState(currentPose);
+      PublishPose(currentPose);
       //std::cout << "Estimated tf: " << std::endl << imgTf << std::endl;
       //std::cout << "Actual tf: " << std::endl << kf->GetTf() << std::endl;
       positionList.push_back(imgTf.block<3,1>(0,3));
@@ -316,6 +337,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       ROS_INFO("FindImageTfVirtualPnp time: %f", (ros::Time::now()-start).toSec());  
       currentPose = imgTf;
       UpdateVirtualSensorState(currentPose);
+      PublishPose(currentPose);
       positionList.push_back(imgTf.block<3,1>(0,3));
       PublishTfViz(imgTf, kf->GetTf());
       ROS_INFO("Found image tf");
@@ -339,6 +361,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
         numLocalizeRetrys = 0;
         currentPose = matches[0].kfc->GetTf();
         UpdateVirtualSensorState(currentPose);
+        PublishPose(currentPose);
         positionList.push_back(currentPose.block<3,1>(0,3));
         PublishTfViz(currentPose, kf->GetTf());
         //PublishSfmMatchViz(goodMatches, goodTVecs);
@@ -734,6 +757,7 @@ Mat MapLocalizer::GetVirtualImageFromTopic(Mat& depths, Mat& mask)
 
   //std::cout << "step: " << depth_msg->step << " encoding: " << depth_msg->encoding << " bigendian: " << (depth_msg->is_bigendian ? 1 : 0) << std::endl;
   ros::Time start = ros::Time::now();
+  #pragma omp parallel for
   for(int i = 0; i < virtual_height; i++)
   {
     for(int j = 0; j < virtual_width; j++)
@@ -1215,12 +1239,12 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
   }
 
   // TODO: Add option to match all descriptors on GPU
-  if("surf_gpu")
+  if(vdesc_type == "surf_gpu")
   {
     gpu::BFMatcher_GPU matcher;
     matcher.knnMatch(kfc->GetGPUDescriptors(), vdesc_gpu, matches, 2);  
   }
-  else if("orb")
+  else if(vdesc_type == "orb")
   {
     BFMatcher matcher(NORM_HAMMING);
     matcher.knnMatch( kfc->GetDescriptors(), vdesc, matches, 2 );

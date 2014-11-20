@@ -57,6 +57,7 @@ private:
   void TestFindImageTfSfm();
   
   void PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImgTf);
+  void PublishPose(Eigen::Matrix4f tf);
   void PublishSfmMatchViz(std::vector<KeyframeMatch > matches, std::vector< Eigen::Vector3f > tvecs);
   void PublishMap();
   void PublishPointCloud(const std::vector<pcl::PointXYZ>&);
@@ -104,6 +105,7 @@ private:
   ros::NodeHandle nh_private;
 
   ros::ServiceClient gazebo_client;
+  ros::Publisher  estimated_pose_pub;
   ros::Publisher  map_marker_pub;
   ros::Publisher match_marker_pub;
   ros::Publisher tvec_marker_pub;
