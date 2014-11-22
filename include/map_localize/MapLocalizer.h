@@ -78,6 +78,7 @@ private:
   std::vector<KeyframeContainer*> keyframes;
   KeyframeContainer* currentKeyframe;
   
+  ros::Time img_time_stamp;
   Mat current_virtual_image;
   sensor_msgs::ImageConstPtr current_virtual_depth_msg;
 

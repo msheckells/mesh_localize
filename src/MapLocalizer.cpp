@@ -11,6 +11,8 @@
 #include <unsupported/Eigen/MatrixFunctions>
 #include <cv_bridge/cv_bridge.h>
 
+#include <tf/transform_broadcaster.h>
+
 #include <opencv2/gpu/gpu.hpp>
 #include <opencv2/nonfree/gpu.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -114,7 +116,7 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
 
   std::srand(time(NULL));
  
-  estimated_pose_pub = nh.advertise<geometry_msgs::Pose>("/map_localize/estimated_pose", 1);
+  estimated_pose_pub = nh.advertise<geometry_msgs::PoseStamped>("/map_localize/estimated_pose", 1);
   map_marker_pub = nh.advertise<visualization_msgs::Marker>("/map_localize/map", 1);
   match_marker_pub = nh.advertise<visualization_msgs::Marker>("/map_localize/match_points", 1);
   tvec_marker_pub = nh.advertise<visualization_msgs::MarkerArray>("/map_localize/t_vectors", 1);
@@ -168,7 +170,7 @@ void MapLocalizer::HandleImage(const sensor_msgs::ImageConstPtr& msg)
   if(!currentKeyframe)
   {
     ROS_INFO("Processing new image");
- 
+    img_time_stamp = ros::Time::now(); 
     if((localize_state == PNP || localize_state == INIT_PNP) && virtual_image_source == "gazebo")
     {
       get_virtual_depth = true;
@@ -251,21 +253,30 @@ void MapLocalizer::UpdateVirtualSensorState(Eigen::Matrix4f tf)
 
 void MapLocalizer::PublishPose(Eigen::Matrix4f tf)
 {
-  geometry_msgs::Pose pose;
-  
-  pose.position.x = tf(0,3);
-  pose.position.y = tf(1,3);
-  pose.position.z = tf(2,3);
+  geometry_msgs::PoseStamped pose;
 
-  Eigen::Matrix3f rot = tf.block<3,3>(0,0)*Eigen::AngleAxisf(-M_PI/2, Eigen::Vector3f::UnitY())*Eigen::AngleAxisf(M_PI/2, Eigen::Vector3f::UnitX());
+  pose.header.stamp = img_time_stamp;
+  
+  pose.pose.position.x = tf(0,3);
+  pose.pose.position.y = tf(1,3);
+  pose.pose.position.z = tf(2,3);
+
+  Eigen::Matrix3f rot = tf.block<3,3>(0,0);
   Eigen::Quaternionf q(rot);
   q.normalize();
-  pose.orientation.x = q.x();
-  pose.orientation.y = q.y();
-  pose.orientation.z = q.z();
-  pose.orientation.w = q.w();
+  pose.pose.orientation.x = q.x();
+  pose.pose.orientation.y = q.y();
+  pose.pose.orientation.z = q.z();
+  pose.pose.orientation.w = q.w();
 
   estimated_pose_pub.publish(pose);
+
+  tf::Transform tf_transform;
+  tf_transform.setOrigin(.8862*tf::Vector3(tf(0,3), tf(1,3), tf(2,3)));
+  tf_transform.setBasis(tf::Matrix3x3(tf(0,0), tf(0,1), tf(0,2),
+                                      tf(1,0), tf(1,1), tf(1,2),
+                                      tf(2,0), tf(2,1), tf(2,2)));
+  br.sendTransform(tf::StampedTransform(tf_transform, img_time_stamp, "world", "estimated_pelican"));
 }
 
 void MapLocalizer::spin(const ros::TimerEvent& e)
@@ -620,7 +631,7 @@ void MapLocalizer::PublishMap()
   br.sendTransform(tf::StampedTransform(marker_transform, ros::Time::now(), "world", "markers"));
 
   visualization_msgs::Marker marker;
-  marker.header.frame_id = "/markers";
+  marker.header.frame_id = "/world";
   marker.header.stamp = ros::Time();
   marker.ns = "map_localize";
   marker.id = 0;
@@ -633,9 +644,9 @@ void MapLocalizer::PublishMap()
   marker.pose.orientation.y = 0;
   marker.pose.orientation.z = 0;
   marker.pose.orientation.w = 0;
-  marker.scale.x = 1.0;
-  marker.scale.y = 1.0;
-  marker.scale.z = 1.0;
+  marker.scale.x = .8862;
+  marker.scale.y = .8862;
+  marker.scale.z = .8862;
   marker.color.a = 0.8;
   marker.color.r = 0.5;
   marker.color.g = 0.5;
