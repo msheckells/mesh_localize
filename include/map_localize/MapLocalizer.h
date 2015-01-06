@@ -8,6 +8,7 @@
 #include "sensor_msgs/Image.h"
 #include "sensor_msgs/CameraInfo.h"
 
+#include "MonocularLocalizer.h"
 #include "KeyframeContainer.h"
 #include "KeyframeMatch.h"
 #include "MapFeatures.h"
@@ -18,16 +19,6 @@
 #include <pcl/PolygonMesh.h>
 class MapLocalizer
 {
-  struct KeyframePositionSorter
-  {
-    MapLocalizer* ml;
-    KeyframePositionSorter(MapLocalizer* ml): ml(ml) {};
-    
-    bool operator()(KeyframeContainer* kfc1, KeyframeContainer* kfc2)
-    {
-      return (kfc1->GetTf().block<3,1>(0,3)-ml->currentPose.block<3,1>(0,3)).norm() < (kfc2->GetTf().block<3,1>(0,3)-ml->currentPose.block<3,1>(0,3)).norm();
-    }
-  };
 
   enum LocalizeState
   {
@@ -43,7 +34,6 @@ public:
   ~MapLocalizer();
 
 private:
-  std::vector< KeyframeMatch > FindImageMatches(KeyframeContainer* img, int k, bool usePos = false);
   Eigen::Matrix4f FindImageTfSfm(KeyframeContainer* img, std::vector< KeyframeMatch >, std::vector< KeyframeMatch >& goodMatches, std::vector< Eigen::Vector3f >& goodTVecs);
   Eigen::Matrix4f FindImageTfPnp(KeyframeContainer* kcv, const MapFeatures& mf);
   bool FindImageTfVirtualPnp(KeyframeContainer* kcv, Eigen::Matrix4f vimgTf, Eigen::Matrix3f vimgK, Eigen::Matrix4f& out, std::string vdesc_type);
@@ -71,23 +61,27 @@ private:
   void UpdateVirtualSensorState(Eigen::Matrix4f tf);
 
   bool WriteDescriptorsToFile(std::string filename);
-  bool LoadPhotoscanFile(std::string filename, std::string desc_filename = "", bool load_descs = false);
+  bool LoadPhotoscanFile(std::string filename);
   Eigen::Matrix4f StringToMatrix4f(std::string);
   std::vector<Point3d> PCLToPoint3d(const std::vector<pcl::PointXYZ>& cpvec);
 
   std::vector<KeyframeContainer*> keyframes;
-  KeyframeContainer* currentKeyframe;
+  std::vector<CameraContainer*> cameras;
   
   ros::Time img_time_stamp;
+  Mat current_image;
   Mat current_virtual_image;
   sensor_msgs::ImageConstPtr current_virtual_depth_msg;
 
   std::vector<Eigen::Vector3f> positionList;
   Eigen::Matrix4f currentPose;
+  bool get_frame;
   bool get_virtual_image;
   bool get_virtual_depth;
   int numPnpRetrys;
   int numLocalizeRetrys;
+
+  MonocularLocalizer* localization_init;
 
   ros::Time spin_time;
 
@@ -101,6 +95,8 @@ private:
   std::string pnp_descriptor_type;
   std::string img_match_descriptor_type;
   bool show_pnp_matches;
+  bool show_global_matches;
+  std::string global_localization_alg;
 
   ros::NodeHandle nh;
   ros::NodeHandle nh_private;

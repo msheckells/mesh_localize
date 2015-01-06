@@ -116,11 +116,13 @@ include_directories(
   ${TinyXML_INCLUDE_DIRS} 
   ${PCL_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
+#  /usr/local/kvld
 ) 
 
 ## Declare a cpp library
 add_library(map_localize
                                   src/KeyframeContainer.cpp
+                                  src/CameraContainer.cpp
                                   src/MapLocalizer.cpp
                                   src/Common.cpp
                                   src/FindCameraMatrices.cpp
@@ -128,6 +130,8 @@ add_library(map_localize
                                   src/KeyframeMatch.cpp
                                   src/MapFeatures.cpp
                                   src/lsh.cpp
+                                  src/FeatureMatchLocalizer.cpp
+                                  src/FABMAPLocalizer.cpp
                                   src/ASiftDetector.cpp)
 
 target_link_libraries(map_localize
@@ -135,6 +139,8 @@ target_link_libraries(map_localize
   ${TinyXML_LIBRARY}
   ${PCL_LIBRARIES}
   ${OpenCV_LIBRARIES}
+#  /usr/local/lib/libkvld.a
+#  /usr/local/lib/libOrsa.a
 )
 
 

@@ -1,5 +1,5 @@
 <launch>
 	<include file="$(find gazebo_ros)/launch/empty_world.launch">
-		<arg name="world_name" value="$(find map_localize)/worlds/lab_cage.world"/>
+		<arg name="world_name" value="$(find map_localize)/worlds/car_terrain.world"/>
 	</include>
 </launch>

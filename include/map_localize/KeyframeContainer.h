@@ -1,6 +1,8 @@
 #ifndef _KEYFRAMECONTAINER_H_
 #define _KEYFRAMECONTAINER_H_
 
+#include "map_localize/CameraContainer.h"
+
 #include <stdio.h>
 #include <iostream>
 #include <opencv2/core/core.hpp>
@@ -18,8 +20,12 @@ using namespace cv;
 class KeyframeContainer
 {
 public:
-  KeyframeContainer(Mat image, std::string desc_type = "asurf", Eigen::Matrix4f tf = Eigen::Matrix4f(), Eigen::Matrix3f K = Eigen::Matrix3f());
-  KeyframeContainer(Mat image, Eigen::Matrix4f tf, Eigen::Matrix3f K, std::vector<KeyPoint>& keypoints, Mat& descriptors);
+  KeyframeContainer(Mat img, std::string desc_type = "asurf");
+  KeyframeContainer(Mat img, std::vector<KeyPoint>& keypoints, Mat& descriptors);
+  KeyframeContainer(CameraContainer* cc, std::string desc_type = "asurf");
+  KeyframeContainer(CameraContainer* cc, std::vector<KeyPoint>& keypoints, Mat& descriptors);
+ ~KeyframeContainer();
+  KeyframeContainer(const KeyframeContainer&);
   
   Mat GetImage();
   Mat GetDescriptors();
@@ -29,12 +35,14 @@ public:
   Eigen::Matrix3f GetK();
 private:
 
-  Eigen::Matrix4f tf;  
-  Eigen::Matrix3f K;  
-  Mat img;
+  void ExtractFeatures(std::string desc_type);
+
+  CameraContainer* cc;
   std::vector<KeyPoint> keypoints;
   Mat descriptors;
   gpu::GpuMat descriptors_gpu;
+
+  bool delete_cc;
 };
 
 #endif
