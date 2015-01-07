@@ -10,10 +10,11 @@
 		<param name="load_descriptors" type="bool" value="true"/>
 		<param name="show_pnp_matches" type="bool" value="false"/>
 		<param name="show_global_matches" type="bool" value="true"/>
-		<param name="descriptor_filename" type="string" value="/home/matt/fabmap_surf_"/>
+		<param name="descriptor_filename" type="string" value="$(find map_localize)/data/lab_fabmap_surf_"/>
 		<param name="virtual_image_source" type="string" value="gazebo"/>
 		<param name="pnp_descriptor_type" type="string" value="surf_gpu"/>
 		<param name="img_match_descriptor_type" type="string" value="surf"/>
+		<param name="image_scale" type="double" value="0.5"/>
 		<param name="global_localization_alg" type="string" value="fabmap"/>
 		<param name="photoscan_filename" type="string" value="/home/matt/Documents/lab_cage_doc.xml"/>
 	</node>

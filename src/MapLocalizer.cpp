@@ -75,6 +75,8 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     img_match_descriptor_type = "asurf";
   if(!nh_private.getParam("global_localization_alg", global_localization_alg))
     global_localization_alg = "feature_match";
+  if(!nh_private.getParam("image_scale", image_scale))
+    image_scale = 1.0;
   
 
   // TODO: read K and distcoeff from param file
@@ -82,9 +84,12 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   distcoeff = Eigen::VectorXf(5);
   distcoeff << -0.456758192707853, 0.197636354824418, 0.000543685887014507, 0.000401738655456894, 0;
 
-  Kcv = Matx33d(K(0,0), K(0,1), K(0,2),
+  Kcv_undistort = Matx33d(K(0,0), K(0,1), K(0,2),
               K(1,0), K(1,1), K(1,2),
               K(2,0), K(2,1), K(2,2)); 
+  Kcv = image_scale*Kcv_undistort;
+  Kcv(2,2) = 1;
+
   distcoeffcv = (Mat_<double>(5,1) << distcoeff(0), distcoeff(1), distcoeff(2), distcoeff(3), distcoeff(4)); 
 
   map_K << 1799.352269, 0, 1799.029749, 0, 1261.4382272, 957.3402899, 0, 0, 1;
@@ -96,6 +101,11 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
               map_K(1,0), map_K(1,1), map_K(1,2),
               map_K(2,0), map_K(2,1), map_K(2,2)); 
   map_distcoeffcv = (Mat_<double>(5,1) << map_distcoeff(0), map_distcoeff(1), map_distcoeff(2), map_distcoeff(3), map_distcoeff(4)); 
+
+  if(image_scale != 1.0)
+  {
+    ROS_INFO("Scaling images by %f", image_scale);
+  }
 
   ROS_INFO("Using %s for pnp descriptors and %s for image matching descriptors", pnp_descriptor_type.c_str(), img_match_descriptor_type.c_str());
 
@@ -185,7 +195,7 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   localize_state = INIT;
 
   spin_time = ros::Time::now();
-  timer = nh_private.createTimer(ros::Duration(0.1), &MapLocalizer::spin, this);
+  timer = nh_private.createTimer(ros::Duration(0.04), &MapLocalizer::spin, this);
 }
 
 MapLocalizer::~MapLocalizer()
@@ -217,7 +227,11 @@ void MapLocalizer::HandleImage(const sensor_msgs::ImageConstPtr& msg)
     ros::Time start = ros::Time::now();
     cv_bridge::CvImageConstPtr cvImg = cv_bridge::toCvShare(msg);
     Mat img_undistort;
-    undistort(cvImg->image, current_image, Kcv, distcoeffcv);
+    undistort(cvImg->image, current_image, Kcv_undistort, distcoeffcv);
+    if(image_scale != 1.0)
+    {
+      resize(current_image, current_image, Size(0,0), image_scale, image_scale);
+    }
     ROS_INFO("Image copy time: %f", (ros::Time::now()-start).toSec());  
     get_frame = false;
   }
@@ -330,7 +344,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       Eigen::Matrix4f imgTf;
       
       ros::Time start = ros::Time::now();
-      if(!FindImageTfVirtualPnp(kf, currentPose, K, imgTf, pnp_descriptor_type))
+      if(!FindImageTfVirtualPnp(kf, currentPose, virtual_K, imgTf, pnp_descriptor_type))
       {
         numPnpRetrys++;
         if(numPnpRetrys > 1)
@@ -363,7 +377,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       ROS_INFO("Descriptor extraction time: %f", (ros::Time::now()-start).toSec());  
 
       ros::Time start = ros::Time::now();
-      if(!FindImageTfVirtualPnp(kf, currentPose, K, imgTf, img_match_descriptor_type))
+      if(!FindImageTfVirtualPnp(kf, currentPose, virtual_K, imgTf, img_match_descriptor_type))
       {
         localize_state = LOCAL_INIT;
         
@@ -1254,7 +1268,7 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
 
   Eigen::Matrix4f tfran;
   //solvePnPRansac(matchPts3d, matchPts, Kcv, 
-  if(!RansacPnP(matchPts3d, matchPts, vimgK, vimgTf.inverse(), tfran))
+  if(!RansacPnP(matchPts3d, matchPts, vimgTf.inverse(), tfran))
   {
     return false;
   }
@@ -1263,7 +1277,7 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
   return true;
 }
 
-bool MapLocalizer::RansacPnP(const std::vector<Point3f>& matchPts3d, const std::vector<Point2f>& matchPts, Eigen::Matrix3f K, Eigen::Matrix4f tfguess, Eigen::Matrix4f& tf)
+bool MapLocalizer::RansacPnP(const std::vector<Point3f>& matchPts3d, const std::vector<Point2f>& matchPts, Eigen::Matrix4f tfguess, Eigen::Matrix4f& tf)
 {
   Mat distcoeffcvPnp = (Mat_<double>(4,1) << 0, 0, 0, 0);
   tf = Eigen::MatrixXf::Identity(4,4);

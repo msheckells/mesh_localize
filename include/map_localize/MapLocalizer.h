@@ -41,7 +41,7 @@ private:
   std::vector<int> FindPlaneInPointCloud(const std::vector<pcl::PointXYZ>& pts);
   Mat GetVirtualImageFromTopic(Mat& depths, Mat& mask);
   Mat GenerateVirtualImage(Eigen::Matrix4f tf, Eigen::Matrix3f K, int height, int width, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud, Mat& depth, Mat& mask);
-  bool RansacPnP(const std::vector<Point3f>& matchPts3d, const std::vector<Point2f>& matchPts, Eigen::Matrix3f K, Eigen::Matrix4f tfguess, Eigen::Matrix4f& out);
+  bool RansacPnP(const std::vector<Point3f>& matchPts3d, const std::vector<Point2f>& matchPts, Eigen::Matrix4f tfguess, Eigen::Matrix4f& out);
 
 
   void TestFindImageTfSfm();
@@ -97,6 +97,7 @@ private:
   bool show_pnp_matches;
   bool show_global_matches;
   std::string global_localization_alg;
+  double image_scale;
 
   ros::NodeHandle nh;
   ros::NodeHandle nh_private;
@@ -124,6 +125,7 @@ private:
   Eigen::VectorXf distcoeff;
   Eigen::VectorXf map_distcoeff;
   Matx33d Kcv;
+  Matx33d Kcv_undistort;
   Matx33d map_Kcv;
   Matx33d virtual_Kcv;
   Mat distcoeffcv;

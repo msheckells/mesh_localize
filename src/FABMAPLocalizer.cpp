@@ -142,7 +142,7 @@ FABMAPLocalizer::FABMAPLocalizer(const std::vector<CameraContainer*>& train, std
 
   //fabmap = new of2::FabMap2(tree, 0.39, 0, of2::FabMap::SAMPLED | of2::FabMap::CHOW_LIU);
   //fabmap->addTraining(train_data);
-  fabmap = new of2::FabMapLUT(tree, 0.39, 0.01, of2::FabMap::MEAN_FIELD | of2::FabMap::CHOW_LIU);
+  fabmap = new of2::FabMapLUT(tree, 0.39, 0.05, of2::FabMap::MEAN_FIELD | of2::FabMap::CHOW_LIU);
 
   fabmap->add(train_data);
 }
