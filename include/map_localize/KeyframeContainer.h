@@ -22,13 +22,16 @@ class KeyframeContainer
 public:
   KeyframeContainer(Mat img, std::string desc_type = "asurf");
   KeyframeContainer(Mat img, std::vector<KeyPoint>& keypoints, Mat& descriptors);
+  KeyframeContainer(Mat img, std::vector<KeyPoint>& keypoints, Mat& descriptors, Mat& depth);
   KeyframeContainer(CameraContainer* cc, std::string desc_type = "asurf");
   KeyframeContainer(CameraContainer* cc, std::vector<KeyPoint>& keypoints, Mat& descriptors);
+  KeyframeContainer(CameraContainer* cc, std::vector<KeyPoint>& keypoints, Mat& descriptors, Mat& depth);
  ~KeyframeContainer();
   KeyframeContainer(const KeyframeContainer&);
   
   Mat GetImage();
   Mat GetDescriptors();
+  Mat GetDepth();
   gpu::GpuMat GetGPUDescriptors();
   std::vector<KeyPoint> GetKeypoints();
   Eigen::Matrix4f GetTf();
@@ -41,8 +44,10 @@ private:
   std::vector<KeyPoint> keypoints;
   Mat descriptors;
   gpu::GpuMat descriptors_gpu;
+  Mat depth; //May not be used
 
   bool delete_cc;
+  bool has_depth;
 };
 
 #endif

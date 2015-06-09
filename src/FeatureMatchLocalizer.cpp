@@ -103,7 +103,7 @@ bool FeatureMatchLocalizer::WriteDescriptorsToFile(std::string filename)
   return true;
 }
 
-bool FeatureMatchLocalizer::localize(Mat& img, Eigen::Matrix4f* pose, Eigen::Matrix4f* pose_guess)
+bool FeatureMatchLocalizer::localize(const Mat& img, const Mat& K, Eigen::Matrix4f* pose, Eigen::Matrix4f* pose_guess)
 {
   KeyframeContainer* kf = new KeyframeContainer(img, desc_type);
   std::vector< KeyframeMatch > matches;

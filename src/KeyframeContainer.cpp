@@ -8,6 +8,7 @@ KeyframeContainer::KeyframeContainer(Mat img, std::string desc_type)
 {
   cc = new CameraContainer(img);
   delete_cc = true;
+  has_depth = false;
   ExtractFeatures(desc_type);
 }
 
@@ -17,13 +18,24 @@ KeyframeContainer::KeyframeContainer(Mat img, std::vector<KeyPoint>& keypoints, 
 {
   cc = new CameraContainer(img);
   delete_cc = true;
+  has_depth = false;
 }
 
+KeyframeContainer::KeyframeContainer(Mat img, std::vector<KeyPoint>& keypoints, Mat& descriptors, Mat& depth) :
+  keypoints(keypoints),
+  descriptors(descriptors),
+  depth(depth)
+{
+  cc = new CameraContainer(img);
+  delete_cc = true;
+  has_depth = true;
+}
 KeyframeContainer::KeyframeContainer(CameraContainer* cc, std::string desc_type) :
  cc(cc)
 {
   delete_cc = false;
   ExtractFeatures(desc_type);
+  has_depth = false;
 }
 
 KeyframeContainer::KeyframeContainer(CameraContainer* cc, std::vector<KeyPoint>& keypoints, Mat& descriptors) :
@@ -32,6 +44,17 @@ KeyframeContainer::KeyframeContainer(CameraContainer* cc, std::vector<KeyPoint>&
   descriptors(descriptors)
 {
   delete_cc = false;
+  has_depth = false;
+}
+
+KeyframeContainer::KeyframeContainer(CameraContainer* cc, std::vector<KeyPoint>& keypoints, Mat& descriptors, Mat& depth) :
+  cc(cc),
+  keypoints(keypoints),
+  descriptors(descriptors),
+  depth(depth)
+{
+  delete_cc = false;
+  has_depth = true;
 }
 
 KeyframeContainer::KeyframeContainer(const KeyframeContainer& kfc)
@@ -40,6 +63,8 @@ KeyframeContainer::KeyframeContainer(const KeyframeContainer& kfc)
   this->descriptors = kfc.descriptors;
   this->cc = new CameraContainer(kfc.cc->GetImage(), kfc.cc->GetTf(), kfc.cc->GetK());
   this->delete_cc = true;
+  this->has_depth = kfc.has_depth;
+  this->depth = kfc.depth;
 }
 
 KeyframeContainer::~KeyframeContainer()
@@ -91,6 +116,15 @@ void KeyframeContainer::ExtractFeatures(std::string desc_type)
 Mat KeyframeContainer::GetImage()
 {
   return cc->GetImage();
+}
+
+Mat KeyframeContainer::GetDepth()
+{
+  if(!has_depth)
+  {
+    std::cout << "KeyframeContainer: WARNING, DEPTH NOT SET" << std::endl;
+  }
+  return depth;
 }
 
 gpu::GpuMat KeyframeContainer::GetGPUDescriptors()

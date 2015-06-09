@@ -147,7 +147,7 @@ FABMAPLocalizer::FABMAPLocalizer(const std::vector<CameraContainer*>& train, std
   fabmap->add(train_data);
 }
 
-bool FABMAPLocalizer::localize(Mat& img, Eigen::Matrix4f* pose, Eigen::Matrix4f* pose_guess)
+bool FABMAPLocalizer::localize(const Mat& img, const Mat& K, Eigen::Matrix4f* pose, Eigen::Matrix4f* pose_guess)
 {
   Mat bow;
   vector<KeyPoint> kpts;

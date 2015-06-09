@@ -129,8 +129,12 @@ add_library(map_localize
                                   src/Triangulation.cpp
                                   src/KeyframeMatch.cpp
                                   src/MapFeatures.cpp
-                                  src/lsh.cpp
+                                  src/ImageDbUtil.cpp
+                                  src/PnPUtil.cpp
+                                  src/OgreImageGenerator.cpp
+                                  src/PointCloudImageGenerator.cpp
                                   src/FeatureMatchLocalizer.cpp
+                                  src/DepthFeatureMatchLocalizer.cpp
                                   src/FABMAPLocalizer.cpp
                                   src/ASiftDetector.cpp)
 

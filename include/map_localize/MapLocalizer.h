@@ -9,6 +9,7 @@
 #include "sensor_msgs/CameraInfo.h"
 
 #include "MonocularLocalizer.h"
+#include "VirtualImageGenerator.h"
 #include "KeyframeContainer.h"
 #include "KeyframeMatch.h"
 #include "MapFeatures.h"
@@ -34,18 +35,13 @@ public:
   ~MapLocalizer();
 
 private:
-  Eigen::Matrix4f FindImageTfSfm(KeyframeContainer* img, std::vector< KeyframeMatch >, std::vector< KeyframeMatch >& goodMatches, std::vector< Eigen::Vector3f >& goodTVecs);
   Eigen::Matrix4f FindImageTfPnp(KeyframeContainer* kcv, const MapFeatures& mf);
   bool FindImageTfVirtualPnp(KeyframeContainer* kcv, Eigen::Matrix4f vimgTf, Eigen::Matrix3f vimgK, Eigen::Matrix4f& out, std::string vdesc_type);
   std::vector<pcl::PointXYZ> GetPointCloudFromFrames(KeyframeContainer*, KeyframeContainer*);
   std::vector<int> FindPlaneInPointCloud(const std::vector<pcl::PointXYZ>& pts);
   Mat GetVirtualImageFromTopic(Mat& depths, Mat& mask);
   Mat GenerateVirtualImage(Eigen::Matrix4f tf, Eigen::Matrix3f K, int height, int width, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud, Mat& depth, Mat& mask);
-  bool RansacPnP(const std::vector<Point3f>& matchPts3d, const std::vector<Point2f>& matchPts, Eigen::Matrix4f tfguess, Eigen::Matrix4f& out);
 
-
-  void TestFindImageTfSfm();
-  
   void PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImgTf);
   void PublishPose(Eigen::Matrix4f tf);
   void PublishSfmMatchViz(std::vector<KeyframeMatch > matches, std::vector< Eigen::Vector3f > tvecs);
@@ -61,11 +57,9 @@ private:
   void UpdateVirtualSensorState(Eigen::Matrix4f tf);
 
   bool WriteDescriptorsToFile(std::string filename);
-  bool LoadPhotoscanFile(std::string filename);
   Eigen::Matrix4f StringToMatrix4f(std::string);
   std::vector<Point3d> PCLToPoint3d(const std::vector<pcl::PointXYZ>& cpvec);
 
-  std::vector<KeyframeContainer*> keyframes;
   std::vector<CameraContainer*> cameras;
   
   ros::Time img_time_stamp;
@@ -82,12 +76,13 @@ private:
   int numLocalizeRetrys;
 
   MonocularLocalizer* localization_init;
+  VirtualImageGenerator* vig;
 
   ros::Time spin_time;
 
-  pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr map_cloud;
   MapFeatures map_features;
 
+  std::string ogre_data_dir;
   std::string pc_filename;
   std::string mesh_filename;
   std::string photoscan_filename;
@@ -124,10 +119,10 @@ private:
   Eigen::Matrix3f virtual_K;
   Eigen::VectorXf distcoeff;
   Eigen::VectorXf map_distcoeff;
-  Matx33d Kcv;
-  Matx33d Kcv_undistort;
-  Matx33d map_Kcv;
-  Matx33d virtual_Kcv;
+  Mat Kcv;
+  Mat Kcv_undistort;
+  Mat map_Kcv;
+  Mat virtual_Kcv;
   Mat distcoeffcv;
   Mat map_distcoeffcv;
   int virtual_height;

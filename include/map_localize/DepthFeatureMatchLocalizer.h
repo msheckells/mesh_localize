@@ -1,11 +1,11 @@
-#ifndef _FEATURE_MATCH_LOCALIZER_H_
-#define _FEATURE_MATCH_LOCALIZER_H_
+#ifndef _DEPTH_FEATURE_MATCH_LOCALIZER_H_
+#define _DEPTH_FEATURE_MATCH_LOCALIZER_H_
 
 #include "MonocularLocalizer.h"
 #include "KeyframeMatch.h"
 #include "KeyframeContainer.h"
 
-class FeatureMatchLocalizer : public MonocularLocalizer
+class DepthFeatureMatchLocalizer : public MonocularLocalizer
 {
   struct KeyframePositionSorter
   {
@@ -20,15 +20,14 @@ class FeatureMatchLocalizer : public MonocularLocalizer
 
 public:
 
-  FeatureMatchLocalizer(const std::vector<CameraContainer*>& train, std::string descriptor_type, bool show_matches = false, bool load_descriptors = false, std::string descriptor_filename = "");
+  DepthFeatureMatchLocalizer(const std::vector<KeyframeContainer*>& train, bool show_matches = false);
   virtual bool localize(const cv::Mat& img, const cv::Mat& K, Eigen::Matrix4f* pose, Eigen::Matrix4f* pose_guess = NULL);
-private:
-  std::vector< KeyframeMatch > FindImageMatches(KeyframeContainer* img, int k, Eigen::Matrix4f* pose_guess = NULL, unsigned int search_bound = 0);
-  bool WriteDescriptorsToFile(std::string filename);
 
+private:
+
+  std::vector< KeyframeMatch > FindImageMatches(KeyframeContainer* img, int k, Eigen::Matrix4f* pose_guess = NULL, unsigned int search_bound = 0);
 
   std::vector<KeyframeContainer*> keyframes; 
-  std::string desc_type;
   bool show_matches;
 };
 

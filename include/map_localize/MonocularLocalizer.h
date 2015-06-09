@@ -7,7 +7,7 @@
 class MonocularLocalizer
 {
 public:
-  virtual bool localize(cv::Mat& img, Eigen::Matrix4f* pose, Eigen::Matrix4f* pose_guess = NULL) = 0; 
+  virtual bool localize(const cv::Mat& img, const cv::Mat& K, Eigen::Matrix4f* pose, Eigen::Matrix4f* pose_guess = NULL) = 0; 
 };
 
 #endif

@@ -24,7 +24,7 @@ class FABMAPLocalizer : public MonocularLocalizer
 public:
 
   FABMAPLocalizer(const std::vector<CameraContainer*>& train, std::string descriptor_type, bool show_matches = false, bool load = false, std::string filename = "");
-  virtual bool localize(cv::Mat& img, Eigen::Matrix4f* pose, Eigen::Matrix4f* poseGuess = NULL);
+  virtual bool localize(const cv::Mat& img, const cv::Mat& K, Eigen::Matrix4f* pose, Eigen::Matrix4f* poseGuess = NULL);
 private:
 
   std::vector<CameraContainer*> keyframes; 
