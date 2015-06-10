@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(map_localize)
-#list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/Modules)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -26,6 +26,12 @@ find_package(OpenCV REQUIRED)
 find_package(Eigen REQUIRED)
 find_package(PCL REQUIRED)
 find_package(OpenMP REQUIRED)
+find_package(ObjectRenderer REQUIRED)
+find_package(OGRE REQUIRED)
+find_package(OIS REQUIRED)
+
+message(STATUS "OBJECT_RENDERER_LIBS=${OBJECT_RENDERER_LIBS}")
+message(STATUS "OBJECT_RENDERER_INCLUDE_DIR=${OBJECT_RENDERER_INCLUDE_DIR}")
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
@@ -96,7 +102,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-  INCLUDE_DIRS include ${Eigen_INCLUDE_DIRS} ${TinyXML_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS}
+  INCLUDE_DIRS include ${Eigen_INCLUDE_DIRS} ${TinyXML_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS} 
+               ${OBJECT_RENDERER_INCLUDE_DIRS}
   LIBRARIES map_localize
   CATKIN_DEPENDS cv_bridge gazebo_msgs image_transport roscpp rospy sensor_msgs std_msgs tf
   DEPENDS TinyXML Eigen OpenCV 
@@ -116,6 +123,9 @@ include_directories(
   ${TinyXML_INCLUDE_DIRS} 
   ${PCL_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
+  ${OBJECT_RENDERER_INCLUDE_DIRS}
+  ${OGRE_INCLUDE_DIRS}
+  ${OIS_INCLUDE_DIRS}
 #  /usr/local/kvld
 ) 
 
@@ -143,10 +153,10 @@ target_link_libraries(map_localize
   ${TinyXML_LIBRARY}
   ${PCL_LIBRARIES}
   ${OpenCV_LIBRARIES}
+  ${OBJECT_RENDERER_LIBS}
 #  /usr/local/lib/libkvld.a
 #  /usr/local/lib/libOrsa.a
 )
-
 
 
 ## Declare a cpp executable

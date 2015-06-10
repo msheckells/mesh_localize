@@ -16,12 +16,12 @@
 #include <opencv2/nonfree/gpu.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
+#include "map_localize/OgreImageGenerator.h"
 #include "map_localize/FindCameraMatrices.h"
 #include "map_localize/Triangulation.h"
 #include "map_localize/ASiftDetector.h"
 #include "map_localize/ImageDbUtil.h"
 #include "map_localize/PnPUtil.h"
-#include "map_localize/OgreImageGenerator.h"
 #include "map_localize/PointCloudImageGenerator.h"
 #include "map_localize/FeatureMatchLocalizer.h"
 #include "map_localize/FABMAPLocalizer.h"
@@ -72,6 +72,8 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     descriptor_filename = "";
   if (!nh_private.getParam("ogre_data_dir", ogre_data_dir))
     ogre_data_dir = "";
+  if (!nh_private.getParam("ogre_cfg_dir", ogre_cfg_dir))
+    ogre_cfg_dir = "";
   if(!nh_private.getParam("virtual_image_source", virtual_image_source))
     virtual_image_source = "point_cloud";
   if(!nh_private.getParam("pnp_descriptor_type", pnp_descriptor_type))
@@ -190,7 +192,7 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   else if(virtual_image_source == "ogre")
   {
     ROS_INFO("Using Ogre for virtual image generation");
-    vig = new OgreImageGenerator();
+    vig = new OgreImageGenerator(ogre_cfg_dir);
   }
   else if(virtual_image_source == "gazebo")
   {

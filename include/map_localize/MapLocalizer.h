@@ -83,6 +83,7 @@ private:
   MapFeatures map_features;
 
   std::string ogre_data_dir;
+  std::string ogre_cfg_dir;
   std::string pc_filename;
   std::string mesh_filename;
   std::string photoscan_filename;
