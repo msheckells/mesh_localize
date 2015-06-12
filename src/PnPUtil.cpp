@@ -23,8 +23,9 @@ std::vector<Point3f> PnPUtil::BackprojectPts(const std::vector<Point2f>& pts, co
   return pts3d;
 }
 
-bool PnPUtil::RansacPnP(const std::vector<Point3f>& matchPts3d, const std::vector<Point2f>& matchPts, Mat Kcv, Eigen::Matrix4f tfguess, Eigen::Matrix4f& tf)
+bool PnPUtil::RansacPnP(const std::vector<Point3f>& matchPts3d, const std::vector<Point2f>& matchPts, Mat Kcv, Eigen::Matrix4f tfguess, Eigen::Matrix4f& tf, std::vector<int>& bestInliersIdx)
 {
+  bestInliersIdx.clear();
   Mat distcoeffcvPnp = (Mat_<double>(4,1) << 0, 0, 0, 0);
   tf = Eigen::MatrixXf::Identity(4,4);
   Mat Rvec, t;
@@ -45,7 +46,6 @@ bool PnPUtil::RansacPnP(const std::vector<Point3f>& matchPts3d, const std::vecto
     ind.push_back(i);
   }
 
-  std::vector<int> bestInliersIdx;
   bool abort = false;
   //ros::Time start = ros::Time::now();
   //#pragma omp parallel for
@@ -105,10 +105,10 @@ bool PnPUtil::RansacPnP(const std::vector<Point3f>& matchPts3d, const std::vecto
     }
     
   } 
-  std::cout << "Num inliers: " << bestInliersIdx.size() << "/" << matchPts.size() << std::endl;
+  //std::cout << "Num inliers: " << bestInliersIdx.size() << "/" << matchPts.size() << std::endl;
   if(bestInliersIdx.size() < 10)
   {
-    std::cout << "ransacPnP: Could not find enough inliers" << std::endl;
+    //std::cout << "ransacPnP: Could not find enough inliers" << std::endl;
     return false;
   }  
   //ROS_INFO("PnpRansac: Ransac time: %f", (ros::Time::now()-start).toSec());  

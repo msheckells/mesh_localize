@@ -36,7 +36,7 @@ public:
 
 private:
   Eigen::Matrix4f FindImageTfPnp(KeyframeContainer* kcv, const MapFeatures& mf);
-  bool FindImageTfVirtualPnp(KeyframeContainer* kcv, Eigen::Matrix4f vimgTf, Eigen::Matrix3f vimgK, Eigen::Matrix4f& out, std::string vdesc_type);
+  bool FindImageTfVirtualPnp(KeyframeContainer* kcv, Eigen::Matrix4f vimgTf, Eigen::Matrix4f& out, std::string vdesc_type);
   std::vector<pcl::PointXYZ> GetPointCloudFromFrames(KeyframeContainer*, KeyframeContainer*);
   std::vector<int> FindPlaneInPointCloud(const std::vector<pcl::PointXYZ>& pts);
   Mat GetVirtualImageFromTopic(Mat& depths, Mat& mask);
@@ -84,6 +84,7 @@ private:
 
   std::string ogre_data_dir;
   std::string ogre_cfg_dir;
+  std::string ogre_model;
   std::string pc_filename;
   std::string mesh_filename;
   std::string photoscan_filename;

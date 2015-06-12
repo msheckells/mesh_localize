@@ -8,52 +8,76 @@
 using namespace cv;
 using namespace std;
 
-DepthFeatureMatchLocalizer::DepthFeatureMatchLocalizer(const std::vector<KeyframeContainer*>& train, bool show_matches)
-  : keyframes(train), show_matches(show_matches)
+DepthFeatureMatchLocalizer::DepthFeatureMatchLocalizer(const std::vector<KeyframeContainer*>& train, std::string desc_type, bool show_matches)
+  : keyframes(train), desc_type(desc_type), show_matches(show_matches)
 {
+  namedWindow( "Match", WINDOW_AUTOSIZE );
 }
 
 bool DepthFeatureMatchLocalizer::localize(const Mat& img, const Mat& Kcv, Eigen::Matrix4f* pose, Eigen::Matrix4f* pose_guess)
 {
-  KeyframeContainer* kf = new KeyframeContainer(img, "surf");
+  KeyframeContainer* kf = new KeyframeContainer(img, desc_type);
   std::vector< KeyframeMatch > matches;
 
   if(pose_guess)
   { 
-    matches = FindImageMatches(kf, 5, pose_guess, keyframes.size()/4);  
+    matches = FindImageMatches(kf, 10, pose_guess, keyframes.size()/4);  
   }
   else
   {
-    matches = FindImageMatches(kf, 5);  
+    matches = FindImageMatches(kf, 10);  
   }
 
-  if(show_matches)
+  // Find most geometrically consistent match
+  int bestMatch = -1;
+  std::vector<int> bestInliers;
+  for(int i = 0; i < matches.size(); i++)
   {
-    for(int i = 0; i < matches.size(); i++)
-    {
-      namedWindow( "Match", WINDOW_AUTOSIZE );
-      imshow("Match", matches[i].kfc->GetImage());
-      waitKey(0);
+    if(matches[i].matchKps1.size() >= 30)
+    { 
+      std::vector<int> inlierIdx;
+      Eigen::Matrix4f vimgTf = matches[i].kfc->GetTf();
+      std::vector<Point3f> matchPts3d = PnPUtil::BackprojectPts(matches[i].matchPts2, vimgTf, matches[i].kfc->GetK(), matches[i].kfc->GetDepth());  
+    
+      Eigen::Matrix4f tf_ransac;
+      if(!PnPUtil::RansacPnP(matchPts3d, matches[i].matchPts1, Kcv, vimgTf.inverse(), tf_ransac, inlierIdx))
+      {
+        continue;
+      }
+
+      std::cout << "Match K=" << std::endl << matches[i].kfc->GetK() << std::endl;
+      std::cout << "Image K=" << std::endl << Kcv << std::endl;
+      if(inlierIdx.size() > bestInliers.size());
+      {
+        bestMatch = i;
+        bestInliers = inlierIdx;
+        *pose = tf_ransac.inverse();
+      }
     }
   }
-
-  if(matches[0].matchKps1.size() >= 40)
-  { 
-    Eigen::Matrix4f vimgTf = matches[0].kfc->GetTf();
-    std::vector<Point3f> matchPts3d = PnPUtil::BackprojectPts(matches[0].matchPts2, vimgTf, matches[0].kfc->GetK(), matches[0].kfc->GetDepth());  
-    
-    Eigen::Matrix4f tf_ransac;
-    if(!PnPUtil::RansacPnP(matchPts3d, matches[0].matchPts1, Kcv, vimgTf.inverse(), tf_ransac))
+  if(bestMatch >= 0)
+  {
+    if(show_matches)
     {
-      return false;
-    }
+      std::vector< DMatch > inlierMatches;
+      for(int j = 0; j < bestInliers.size(); j++)
+      {
+        inlierMatches.push_back(matches[bestMatch].matches[bestInliers[j]]);
+      }
 
-    *pose = tf_ransac.inverse();
+      Mat img_matches;
+      drawMatches(img, kf->GetKeypoints(), matches[bestMatch].kfc->GetImage(), matches[bestMatch].kfc->GetKeypoints(), inlierMatches, img_matches);
+      imshow("Match", img_matches);
+      waitKey(1);
+    }
+    std::cout << "DepthFeatureMatchLocalizer: Found consistent match (" << bestInliers.size() << " inliers)" << std::endl;
+    std::cout << "PnpPose=" << std::endl << *pose << std::endl;
+    std::cout << "MatchPose=" << std::endl << matches[bestMatch].kfc->GetTf() << std::endl;
     return true;
   }
   else
   {
-    printf("Match not good enough: only %d match points\n", int(matches[0].matchKps1.size()));
+    std::cout << "DepthFeatureMatchLocalizer: no matches are geometrically consistent" << std::endl;
     return false;
   }
 }

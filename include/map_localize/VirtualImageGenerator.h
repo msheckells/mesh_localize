@@ -9,5 +9,6 @@ class VirtualImageGenerator
 {
 public:
   virtual cv::Mat GenerateVirtualImage(const Eigen::Matrix4f& pose, cv::Mat& depth, cv::Mat& mask) = 0;  
+  virtual Eigen::Matrix3f GetK() = 0;
 };
 #endif

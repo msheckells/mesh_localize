@@ -12,6 +12,11 @@ PointCloudImageGenerator::PointCloudImageGenerator(pcl::PointCloud<pcl::PointXYZ
 {
 }
 
+Eigen::Matrix3f PointCloudImageGenerator::GetK()
+{
+  return K;
+}
+
 cv::Mat PointCloudImageGenerator::GenerateVirtualImage(const Eigen::Matrix4f& tf, cv::Mat& depths, cv::Mat& mask)
 {
   double scale = 1.0;

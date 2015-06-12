@@ -74,6 +74,8 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     ogre_data_dir = "";
   if (!nh_private.getParam("ogre_cfg_dir", ogre_cfg_dir))
     ogre_cfg_dir = "";
+  if (!nh_private.getParam("ogre_model", ogre_model))
+    ogre_model = "";
   if(!nh_private.getParam("virtual_image_source", virtual_image_source))
     virtual_image_source = "point_cloud";
   if(!nh_private.getParam("pnp_descriptor_type", pnp_descriptor_type))
@@ -103,8 +105,6 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
 
   ROS_INFO("Using %s for pnp descriptors and %s for image matching descriptors", pnp_descriptor_type.c_str(), img_match_descriptor_type.c_str());
 
-
-  // TODO: move image db loading to utils.  Create one for Photoscan, one for Ogre
   if(global_localization_alg == "feature_match")
   {
     vector<CameraContainer*> image_db;
@@ -123,7 +123,12 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
       return;
     }
     ROS_INFO("Using Ogre object feature matching for initialization");
-    localization_init = new DepthFeatureMatchLocalizer(image_db, show_global_matches);
+    if(img_match_descriptor_type != "surf")
+    {
+      ROS_ERROR("img_match_descriptor_type must be 'surf' when using OGRE ImageDb");
+      return;
+    }
+    localization_init = new DepthFeatureMatchLocalizer(image_db, img_match_descriptor_type, show_global_matches);
   }
   else if(global_localization_alg == "fabmap")
   {
@@ -187,12 +192,12 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
       return;
     }
     ROS_INFO("Successfully loaded point cloud");
-    vig = new PointCloudImageGenerator(map_cloud, K, 480, 640); // TODO: use actual image size
+    vig = new PointCloudImageGenerator(map_cloud, K, msg->height, msg->width); 
   }
   else if(virtual_image_source == "ogre")
   {
     ROS_INFO("Using Ogre for virtual image generation");
-    vig = new OgreImageGenerator(ogre_cfg_dir);
+    vig = new OgreImageGenerator(ogre_cfg_dir, ogre_model);
   }
   else if(virtual_image_source == "gazebo")
   {
@@ -278,38 +283,41 @@ void MapLocalizer::HandleVirtualDepth(const sensor_msgs::ImageConstPtr& msg)
 
 void MapLocalizer::UpdateVirtualSensorState(Eigen::Matrix4f tf)
 {
-  gazebo_msgs::SetLinkState vimg_state_srv;
-  gazebo_msgs::LinkState vimg_state_msg;
-  vimg_state_msg.link_name = "kinect::link";
-
-  vimg_state_msg.pose.position.x = tf(0,3);
-  vimg_state_msg.pose.position.y = tf(1,3);
-  vimg_state_msg.pose.position.z = tf(2,3);
-
-  Eigen::Matrix3f rot = tf.block<3,3>(0,0)*Eigen::AngleAxisf(-M_PI/2, Eigen::Vector3f::UnitY())*Eigen::AngleAxisf(M_PI/2, Eigen::Vector3f::UnitX());
-  Eigen::Quaternionf q(rot);
-  q.normalize();
-  vimg_state_msg.pose.orientation.x = q.x();
-  vimg_state_msg.pose.orientation.y = q.y();
-  vimg_state_msg.pose.orientation.z = q.z();
-  vimg_state_msg.pose.orientation.w = q.w();
-  
-  vimg_state_msg.twist.linear.x = 0;
-  vimg_state_msg.twist.linear.y = 0;
-  vimg_state_msg.twist.linear.z = 0;
-  vimg_state_msg.twist.angular.x = 0;
-  vimg_state_msg.twist.angular.y = 0;
-  vimg_state_msg.twist.angular.z = 0;
-
-  vimg_state_srv.request.link_state = vimg_state_msg;
-
-  ros::Time start = ros::Time::now();
-  if(!gazebo_client.call(vimg_state_srv))
+  if(virtual_image_source == "gazebo")
   {
-    ROS_ERROR("Failed to contact gazebo set_link_state service");
+    gazebo_msgs::SetLinkState vimg_state_srv;
+    gazebo_msgs::LinkState vimg_state_msg;
+    vimg_state_msg.link_name = "kinect::link";
+
+    vimg_state_msg.pose.position.x = tf(0,3);
+    vimg_state_msg.pose.position.y = tf(1,3);
+    vimg_state_msg.pose.position.z = tf(2,3);
+
+    Eigen::Matrix3f rot = tf.block<3,3>(0,0)*Eigen::AngleAxisf(-M_PI/2, Eigen::Vector3f::UnitY())*Eigen::AngleAxisf(M_PI/2, Eigen::Vector3f::UnitX());
+    Eigen::Quaternionf q(rot);
+    q.normalize();
+    vimg_state_msg.pose.orientation.x = q.x();
+    vimg_state_msg.pose.orientation.y = q.y();
+    vimg_state_msg.pose.orientation.z = q.z();
+    vimg_state_msg.pose.orientation.w = q.w();
+  
+    vimg_state_msg.twist.linear.x = 0;
+    vimg_state_msg.twist.linear.y = 0;
+    vimg_state_msg.twist.linear.z = 0;
+    vimg_state_msg.twist.angular.x = 0;
+    vimg_state_msg.twist.angular.y = 0;
+    vimg_state_msg.twist.angular.z = 0;
+
+    vimg_state_srv.request.link_state = vimg_state_msg;
+
+    ros::Time start = ros::Time::now();
+    if(!gazebo_client.call(vimg_state_srv))
+    {
+      ROS_ERROR("Failed to contact gazebo set_link_state service");
+    }
+    ROS_INFO("set_link_state time: %f", (ros::Time::now()-start).toSec());
+    usleep(1e4);
   }
-  ROS_INFO("set_link_state time: %f", (ros::Time::now()-start).toSec());
-  usleep(1e4);
 }
 
 void MapLocalizer::PublishPose(Eigen::Matrix4f tf)
@@ -358,11 +366,12 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       Eigen::Matrix4f imgTf;
       
       ros::Time start = ros::Time::now();
-      if(!FindImageTfVirtualPnp(kf, currentPose, virtual_K, imgTf, pnp_descriptor_type))
+      if(!FindImageTfVirtualPnp(kf, currentPose, imgTf, pnp_descriptor_type))
       {
         numPnpRetrys++;
         if(numPnpRetrys > 1)
         {
+          ROS_INFO("PnP failed, reinitializing using last known pose");
           numPnpRetrys = 0;
           localize_state = LOCAL_INIT;
         }
@@ -391,8 +400,9 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       ROS_INFO("Descriptor extraction time: %f", (ros::Time::now()-start).toSec());  
 
       ros::Time start = ros::Time::now();
-      if(!FindImageTfVirtualPnp(kf, currentPose, virtual_K, imgTf, img_match_descriptor_type))
+      if(!FindImageTfVirtualPnp(kf, currentPose, imgTf, img_match_descriptor_type))
       {
+        ROS_INFO("PnP failed, reinitializing using last known pose");
         localize_state = LOCAL_INIT;
         
         delete kf;
@@ -442,6 +452,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
         numLocalizeRetrys++;
         if(numLocalizeRetrys > 3)
         {
+          ROS_INFO("Fully reinitializing");
           localize_state = INIT;
         }
       }
@@ -879,20 +890,23 @@ std::vector<Point3d> MapLocalizer::PCLToPoint3d(const std::vector<pcl::PointXYZ>
   return points;
 }
 
-bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f vimgTf, Eigen::Matrix3f vimgK, Eigen::Matrix4f& tf, std::string vdesc_type)
+bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f vimgTf, Eigen::Matrix4f& tf, std::string vdesc_type)
 {
   tf = Eigen::MatrixXf::Identity(4,4);
 
   // Get virtual image and depth map
   Mat depth, mask;
   Mat vimg;
+  Eigen::Matrix3f vimgK;
   ros::Time start = ros::Time::now();
   if(virtual_image_source == "gazebo")
   {
+    vimgK = virtual_K; 
     vimg = GetVirtualImageFromTopic(depth, mask);
   }
   else if(virtual_image_source == "ogre" || virtual_image_source == "point_cloud")
   {
+    vimgK = vig->GetK(); 
     vimg = vig->GenerateVirtualImage(vimgTf, depth, mask);
   }
   else
@@ -906,7 +920,8 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
   Mat depth_im;
   double min_depth, max_depth;
   minMaxLoc(depth, &min_depth, &max_depth);    
-  depth.convertTo(depth_im, CV_8U, 255.0/(max_depth-min_depth), 0);//-255.0/min_depth);
+  //std::cout << "min_depth=" << min_depth << " max_depth=" << max_depth << std::endl;
+  depth.convertTo(depth_im, CV_8U, 255.0/(max_depth-min_depth), 0);// -min_depth*255.0/(max_depth-min_depth));
 
   namedWindow( "Query", WINDOW_AUTOSIZE );// Create a window for display.
   imshow( "Query", kfc->GetImage() ); 
@@ -914,8 +929,8 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
   imshow( "Virtual", vimg ); 
   namedWindow( "Depth", WINDOW_AUTOSIZE );// Create a window for display.
   imshow( "Depth", depth_im ); 
-  namedWindow( "Mask", WINDOW_AUTOSIZE );// Create a window for display.
-  imshow( "Mask", mask ); 
+  //namedWindow( "Mask", WINDOW_AUTOSIZE );// Create a window for display.
+  //imshow( "Mask", mask ); 
   waitKey(1);
 #endif
 
@@ -1070,7 +1085,8 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
 
   Eigen::Matrix4f tfran;
   //solvePnPRansac(matchPts3d, matchPts, Kcv, 
-  if(!PnPUtil::RansacPnP(matchPts3d, matchPts, Kcv, vimgTf.inverse(), tfran))
+  std::vector<int> inlierIdx;
+  if(!PnPUtil::RansacPnP(matchPts3d, matchPts, Kcv, vimgTf.inverse(), tfran, inlierIdx))
   {
     return false;
   }

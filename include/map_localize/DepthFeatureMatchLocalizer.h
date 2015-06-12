@@ -20,7 +20,7 @@ class DepthFeatureMatchLocalizer : public MonocularLocalizer
 
 public:
 
-  DepthFeatureMatchLocalizer(const std::vector<KeyframeContainer*>& train, bool show_matches = false);
+  DepthFeatureMatchLocalizer(const std::vector<KeyframeContainer*>& train, std::string desc_type = "surf", bool show_matches = false);
   virtual bool localize(const cv::Mat& img, const cv::Mat& K, Eigen::Matrix4f* pose, Eigen::Matrix4f* pose_guess = NULL);
 
 private:
@@ -29,6 +29,7 @@ private:
 
   std::vector<KeyframeContainer*> keyframes; 
   bool show_matches;
+  std::string desc_type;
 };
 
 #endif

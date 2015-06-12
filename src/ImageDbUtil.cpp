@@ -53,15 +53,15 @@ bool ImageDbUtil::LoadOgreDataDir(std::string data_dir, std::vector<KeyframeCont
     return false;
   }
 
-  std::cout << "Successfully opened keypoints and descriptors" << std::endl;
+  std::cout << "Successfully opened " << num_keyframes << " keypoints and descriptors" << std::endl;
 
   std::stringstream ss;
   Mat Kcv;
   Eigen::MatrixXf K;
   ss.str(std::string()); // cleaning ss
-  ss << data_dir << "/" << "intrinsics.xml";
+  ss << data_dir << "/intrinsics.xml";
   FileStorage fs_K(ss.str(), FileStorage::READ);
-  fs_K["instrinsics"] >> Kcv;
+  fs_K["intrinsics"] >> Kcv;
   fs_K.release(); 
   cv2eigen(Kcv, K);
 
@@ -102,11 +102,16 @@ bool ImageDbUtil::LoadOgreDataDir(std::string data_dir, std::vector<KeyframeCont
  
     Eigen::MatrixXf pose_eig;
     cv2eigen(pose, pose_eig);
-    CameraContainer* cc = new CameraContainer(keyframe, pose_eig, K);
+    //std::cout << "pose=" << std::endl << pose << std::endl;
+    //std::cout << "pose_eig=" << std::endl << pose_eig << std::endl;
+    //std::cout << "Kcv=" << std::endl << Kcv << std::endl;
+    //std::cout << "K=" << std::endl << K << std::endl;
+    CameraContainer* cc = new CameraContainer(keyframe, Eigen::Matrix4f(pose_eig), K);
     KeyframeContainer* kfc = new KeyframeContainer(cc, kps, desc, depth);
     keyframes.push_back(kfc);    
   }
-  printf("Successfully loaded images");
+  std::cout << "Successfully loaded model keyframes" << std::endl;
+  return true;
 }
 
 bool ImageDbUtil::LoadPhotoscanFile(std::string filename, vector<CameraContainer*>& cameras, Mat map_Kcv, Mat map_distcoeffcv)
