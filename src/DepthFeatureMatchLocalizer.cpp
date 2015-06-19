@@ -11,7 +11,7 @@ using namespace std;
 DepthFeatureMatchLocalizer::DepthFeatureMatchLocalizer(const std::vector<KeyframeContainer*>& train, std::string desc_type, bool show_matches)
   : keyframes(train), desc_type(desc_type), show_matches(show_matches)
 {
-  namedWindow( "Match", WINDOW_AUTOSIZE );
+  namedWindow( "Match", WINDOW_NORMAL );
 }
 
 bool DepthFeatureMatchLocalizer::localize(const Mat& img, const Mat& Kcv, Eigen::Matrix4f* pose, Eigen::Matrix4f* pose_guess)
@@ -30,7 +30,8 @@ bool DepthFeatureMatchLocalizer::localize(const Mat& img, const Mat& Kcv, Eigen:
 
   // Find most geometrically consistent match
   int bestMatch = -1;
-  std::vector<int> bestInliers;
+  std::vector<int> bestInliers; 
+  double bestReprojError;
   for(int i = 0; i < matches.size(); i++)
   {
     if(matches[i].matchKps1.size() >= 30)
@@ -39,19 +40,48 @@ bool DepthFeatureMatchLocalizer::localize(const Mat& img, const Mat& Kcv, Eigen:
       Eigen::Matrix4f vimgTf = matches[i].kfc->GetTf();
       std::vector<Point3f> matchPts3d = PnPUtil::BackprojectPts(matches[i].matchPts2, vimgTf, matches[i].kfc->GetK(), matches[i].kfc->GetDepth());  
     
+      /** Debugging Backproject **
+      Eigen::Matrix4f vimgTfI = vimgTf.inverse();
+      Mat distcoeffcvPnp = (Mat_<double>(4,1) << 0, 0, 0, 0);
+      Mat Rvec, t;
+      Mat Rtest = (Mat_<double>(3,3) << vimgTfI(0,0), vimgTfI(0,1), vimgTfI(0,2),
+                                     vimgTfI(1,0), vimgTfI(1,1), vimgTfI(1,2),
+                                     vimgTfI(2,0), vimgTfI(2,1), vimgTfI(2,2));
+      Rodrigues(Rtest, Rvec);
+      t = (Mat_<double>(3,1) << vimgTfI(0,3), vimgTfI(1,3), vimgTfI(2,3));
+      std::vector<Point2f> reprojPts;
+      projectPoints(matchPts3d, Rvec, t, Kcv, distcoeffcvPnp, reprojPts);
+      for(int j = 0; j < reprojPts.size(); j++)
+      {
+        std::cout << j << ": " << reprojPts[j] << " " << matches[i].matchPts2[j] << std::endl;
+      }    
+      /******/
+
+#if 0
+      Mat depth_im;
+      double min_depth, max_depth;
+      minMaxLoc(matches[i].kfc->GetDepth(), &min_depth, &max_depth);    
+      //std::cout << "min_depth=" << min_depth << " max_depth=" << max_depth << std::endl;
+      matches[i].kfc->GetDepth().convertTo(depth_im, CV_8U, 255.0/(max_depth-min_depth), 0);// -min_depth*255.0/(max_depth-min_depth));
+      namedWindow( "Global Depth", WINDOW_NORMAL );// Create a window for display.
+      imshow( "Global Depth", depth_im ); 
+#endif
+
       Eigen::Matrix4f tf_ransac;
-      if(!PnPUtil::RansacPnP(matchPts3d, matches[i].matchPts1, Kcv, vimgTf.inverse(), tf_ransac, inlierIdx))
+      double reprojError;
+      if(!PnPUtil::RansacPnP(matchPts3d, matches[i].matchPts1, Kcv, vimgTf.inverse(), tf_ransac, inlierIdx, &reprojError))
       {
         continue;
       }
 
-      std::cout << "Match K=" << std::endl << matches[i].kfc->GetK() << std::endl;
-      std::cout << "Image K=" << std::endl << Kcv << std::endl;
+      //std::cout << "Match K=" << std::endl << matches[i].kfc->GetK() << std::endl;
+      //std::cout << "Image K=" << std::endl << Kcv << std::endl;
       if(inlierIdx.size() > bestInliers.size());
       {
         bestMatch = i;
         bestInliers = inlierIdx;
         *pose = tf_ransac.inverse();
+        bestReprojError = reprojError;
       }
     }
   }
@@ -70,7 +100,7 @@ bool DepthFeatureMatchLocalizer::localize(const Mat& img, const Mat& Kcv, Eigen:
       imshow("Match", img_matches);
       waitKey(1);
     }
-    std::cout << "DepthFeatureMatchLocalizer: Found consistent match (" << bestInliers.size() << " inliers)" << std::endl;
+    std::cout << "DepthFeatureMatchLocalizer: Found consistent match (" << bestInliers.size() << " inliers).  Avg reproj error: " << bestReprojError << std::endl;
     std::cout << "PnpPose=" << std::endl << *pose << std::endl;
     std::cout << "MatchPose=" << std::endl << matches[bestMatch].kfc->GetTf() << std::endl;
     return true;

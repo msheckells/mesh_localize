@@ -226,6 +226,12 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     return;
   }
 
+  if(show_pnp_matches)
+  { 
+    namedWindow( "PnP Matches", WINDOW_NORMAL );
+    namedWindow( "PnP Match Inliers", WINDOW_NORMAL );
+  }
+
   localize_state = INIT;
 
   spin_time = ros::Time::now();
@@ -251,11 +257,13 @@ void MapLocalizer::HandleImage(const sensor_msgs::ImageConstPtr& msg)
     ros::Time start = ros::Time::now();
     cv_bridge::CvImageConstPtr cvImg = cv_bridge::toCvShare(msg);
     Mat img_undistort;
-    undistort(cvImg->image, current_image, Kcv_undistort, distcoeffcv);
+    //undistort(cvImg->image, current_image, Kcv_undistort, distcoeffcv);
     if(image_scale != 1.0)
     {
-      resize(current_image, current_image, Size(0,0), image_scale, image_scale);
+      resize(cvImg->image, img_undistort, Size(0,0), image_scale, image_scale);
+      //resize(current_image, current_image, Size(0,0), image_scale, image_scale);
     }
+    undistort(img_undistort, current_image, Kcv, distcoeffcv);
     ROS_INFO("Image copy time: %f", (ros::Time::now()-start).toSec());  
     get_frame = false;
   }
@@ -345,7 +353,8 @@ void MapLocalizer::PublishPose(Eigen::Matrix4f tf)
   tf_transform.setBasis(tf::Matrix3x3(tf(0,0), tf(0,1), tf(0,2),
                                       tf(1,0), tf(1,1), tf(1,2),
                                       tf(2,0), tf(2,1), tf(2,2)));
-  br.sendTransform(tf::StampedTransform(tf_transform, img_time_stamp, "world", "estimated_pelican"));
+  br.sendTransform(tf::StampedTransform(tf_transform, img_time_stamp, "world", "camera_pose"));
+  br.sendTransform(tf::StampedTransform(tf_transform.inverse(), img_time_stamp, "world", "object_pose"));
 }
 
 void MapLocalizer::spin(const ros::TimerEvent& e)
@@ -462,6 +471,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
     }
     ROS_INFO("Spin time: %f", (ros::Time::now() - spin_time).toSec());
     spin_time = ros::Time::now();
+    std::cout << "Pose=" << std::endl << currentPose << std::endl;
 
     get_frame = true;
   }
@@ -923,15 +933,15 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
   //std::cout << "min_depth=" << min_depth << " max_depth=" << max_depth << std::endl;
   depth.convertTo(depth_im, CV_8U, 255.0/(max_depth-min_depth), 0);// -min_depth*255.0/(max_depth-min_depth));
 
-  namedWindow( "Query", WINDOW_AUTOSIZE );// Create a window for display.
+  namedWindow( "Query", WINDOW_NORMAL );// Create a window for display.
   imshow( "Query", kfc->GetImage() ); 
-  namedWindow( "Virtual", WINDOW_AUTOSIZE );// Create a window for display.
+  namedWindow( "Virtual", WINDOW_NORMAL );// Create a window for display.
   imshow( "Virtual", vimg ); 
-  namedWindow( "Depth", WINDOW_AUTOSIZE );// Create a window for display.
+  namedWindow( "Depth", WINDOW_NORMAL );// Create a window for display.
   imshow( "Depth", depth_im ); 
-  //namedWindow( "Mask", WINDOW_AUTOSIZE );// Create a window for display.
-  //imshow( "Mask", mask ); 
-  waitKey(1);
+  namedWindow( "Mask", WINDOW_NORMAL );// Create a window for display.
+  imshow( "Mask", mask ); 
+  waitKey(0);
 #endif
 
   // Find features in virtual image
@@ -1058,8 +1068,8 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
     //PublishPointCloud(matchPts3d_pcl);
     Mat img_matches;
     drawMatches(kfc->GetImage(), kfc->GetKeypoints(), vimg, vkps, goodMatches, img_matches);
-    imshow("matches", img_matches);
-    waitKey(0);
+    imshow("PnP Matches", img_matches);
+    waitKey(1);
   }
 
   if(goodMatches.size() < 4)
@@ -1086,11 +1096,28 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
   Eigen::Matrix4f tfran;
   //solvePnPRansac(matchPts3d, matchPts, Kcv, 
   std::vector<int> inlierIdx;
-  if(!PnPUtil::RansacPnP(matchPts3d, matchPts, Kcv, vimgTf.inverse(), tfran, inlierIdx))
+  double finalReprojError;
+  start = ros::Time::now();
+  if(!PnPUtil::RansacPnP(matchPts3d, matchPts, Kcv, vimgTf.inverse(), tfran, inlierIdx, &finalReprojError))
   {
     return false;
   }
 
+  if(show_pnp_matches)
+  { 
+    std::vector< DMatch > inlierMatches;
+    for(int j = 0; j < inlierIdx.size(); j++)
+    {
+      inlierMatches.push_back(goodMatches[inlierIdx[j]]);
+    }
+    Mat img_matches;
+    drawMatches(kfc->GetImage(), kfc->GetKeypoints(), vimg, vkps, inlierMatches, img_matches);
+    imshow("PnP Match Inliers", img_matches);
+    waitKey(1);
+  }
+
+  ROS_INFO("VirtualPnP: Ransac PnP time: %f", (ros::Time::now()-start).toSec());
+  ROS_INFO("VirtualPnP: found match. Average reproj error = %f", finalReprojError);
   tf = tfran.inverse();
   return true;
 }

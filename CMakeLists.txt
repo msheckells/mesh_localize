@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(map_localize)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules)
+SET(CMAKE_CXX_FLAGS "-march=native")
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -161,6 +162,7 @@ target_link_libraries(map_localize
 
 ## Declare a cpp executable
 add_executable(map_localize_node src/map_localize_node.cpp)
+add_executable(render_node src/render_node.cpp)
 
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
@@ -174,6 +176,10 @@ target_link_libraries(map_localize_node
    ${catkin_LIBRARIES}
 )
 
+target_link_libraries(render_node
+   map_localize
+   ${catkin_LIBRARIES}
+)
 #############
 ## Install ##
 #############
