@@ -36,7 +36,8 @@ public:
 
 private:
   Eigen::Matrix4f FindImageTfPnp(KeyframeContainer* kcv, const MapFeatures& mf);
-  bool FindImageTfVirtualPnp(KeyframeContainer* kcv, Eigen::Matrix4f vimgTf, Eigen::Matrix4f& out, std::string vdesc_type);
+  bool FindImageTfVirtualPnp(KeyframeContainer* kcv, Eigen::Matrix4f vimgTf, Eigen::Matrix4f& out, std::string vdesc_type, bool mask_kf);
+  bool FindImageTfVirtualEdges(KeyframeContainer* kcv, Eigen::Matrix4f vimgTf, Eigen::Matrix4f& out, bool mask_kf);
   std::vector<pcl::PointXYZ> GetPointCloudFromFrames(KeyframeContainer*, KeyframeContainer*);
   std::vector<int> FindPlaneInPointCloud(const std::vector<pcl::PointXYZ>& pts);
   Mat GetVirtualImageFromTopic(Mat& depths, Mat& mask);
@@ -59,6 +60,10 @@ private:
   bool WriteDescriptorsToFile(std::string filename);
   Eigen::Matrix4f StringToMatrix4f(std::string);
   std::vector<Point3d> PCLToPoint3d(const std::vector<pcl::PointXYZ>& cpvec);
+  void ReprojectMask(cv::Mat& dst, const cv::Mat& src, const Eigen::Matrix3f& dstK, 
+    const Eigen::Matrix3f& srcK, const cv::Mat& src_depth);
+  void CalcImageGradientDirection(Mat& dst, const Mat& src);
+  void DrawGradientLines(Mat& dst, const Mat& src, const Mat& edges, const Mat& gdir);
 
   std::vector<CameraContainer*> cameras;
   
@@ -93,6 +98,7 @@ private:
   std::string img_match_descriptor_type;
   bool show_pnp_matches;
   bool show_global_matches;
+  bool show_debug;
   std::string global_localization_alg;
   double image_scale;
 
@@ -117,6 +123,7 @@ private:
   ros::Timer timer;
 
   Eigen::Matrix3f K;
+  Eigen::Matrix3f K_scaled;
   Eigen::Matrix3f map_K;
   Eigen::Matrix3f virtual_K;
   Eigen::VectorXf distcoeff;

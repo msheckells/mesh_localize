@@ -4,12 +4,13 @@
 #include <opencv2/gpu/gpu.hpp>
 #include <opencv2/nonfree/gpu.hpp>
 
-KeyframeContainer::KeyframeContainer(Mat img, std::string desc_type)
+KeyframeContainer::KeyframeContainer(Mat img, std::string desc_type, bool extract_now)
+ : desc_type(desc_type), has_depth(false), delete_cc(true)
 {
+  mask = Mat(img.rows, img.cols, CV_8U, Scalar(255));
   cc = new CameraContainer(img);
-  delete_cc = true;
-  has_depth = false;
-  ExtractFeatures(desc_type);
+  if(extract_now)
+    ExtractFeatures(desc_type);
 }
 
 KeyframeContainer::KeyframeContainer(Mat img, std::vector<KeyPoint>& keypoints, Mat& descriptors) :
@@ -17,6 +18,7 @@ KeyframeContainer::KeyframeContainer(Mat img, std::vector<KeyPoint>& keypoints, 
   descriptors(descriptors)
 {
   cc = new CameraContainer(img);
+  mask = Mat(img.rows, img.cols, CV_8U, Scalar(255));
   delete_cc = true;
   has_depth = false;
 }
@@ -27,6 +29,7 @@ KeyframeContainer::KeyframeContainer(Mat img, std::vector<KeyPoint>& keypoints, 
   depth(depth)
 {
   cc = new CameraContainer(img);
+  mask = Mat(img.rows, img.cols, CV_8U, Scalar(255));
   delete_cc = true;
   has_depth = true;
 }
@@ -34,6 +37,7 @@ KeyframeContainer::KeyframeContainer(CameraContainer* cc, std::string desc_type)
  cc(cc)
 {
   delete_cc = false;
+  mask = Mat(cc->GetImage().rows, cc->GetImage().cols, CV_8U, Scalar(255));
   ExtractFeatures(desc_type);
   has_depth = false;
 }
@@ -43,6 +47,7 @@ KeyframeContainer::KeyframeContainer(CameraContainer* cc, std::vector<KeyPoint>&
   keypoints(keypoints),
   descriptors(descriptors)
 {
+  mask = Mat(cc->GetImage().rows, cc->GetImage().cols, CV_8U, Scalar(255));
   delete_cc = false;
   has_depth = false;
 }
@@ -53,6 +58,7 @@ KeyframeContainer::KeyframeContainer(CameraContainer* cc, std::vector<KeyPoint>&
   descriptors(descriptors),
   depth(depth)
 {
+  mask = Mat(cc->GetImage().rows, cc->GetImage().cols, CV_8U, Scalar(255));
   delete_cc = false;
   has_depth = true;
 }
@@ -65,6 +71,7 @@ KeyframeContainer::KeyframeContainer(const KeyframeContainer& kfc)
   this->delete_cc = true;
   this->has_depth = kfc.has_depth;
   this->depth = kfc.depth;
+  this->mask = kfc.mask;
 }
 
 KeyframeContainer::~KeyframeContainer()
@@ -75,29 +82,40 @@ KeyframeContainer::~KeyframeContainer()
   } 
 }
 
+void KeyframeContainer::SetMask(Mat new_mask)
+{
+  assert(cc->GetImage().rows == mask.rows);
+  assert(cc->GetImage().cols == mask.cols);
+  mask = new_mask;
+}
+
+void KeyframeContainer::ExtractFeatures()
+{
+  ExtractFeatures(desc_type);
+}
+
 void KeyframeContainer::ExtractFeatures(std::string desc_type)
 {
   Mat img = cc->GetImage();
   if(desc_type == "asift")
   {
     ASiftDetector detector;
-    detector.detectAndCompute(img, keypoints, descriptors, ASiftDetector::SIFT);
+    detector.detectAndCompute(img, keypoints, descriptors, mask, ASiftDetector::SIFT);
   }
   else if(desc_type == "asurf")
   {
     ASiftDetector detector;
-    detector.detectAndCompute(img, keypoints, descriptors, ASiftDetector::SURF);
+    detector.detectAndCompute(img, keypoints, descriptors, mask, ASiftDetector::SURF);
   }  
   else if(desc_type == "orb")
   {
     ORB orb(1000);
-    Mat mask(img.rows, img.cols, CV_8U, Scalar(255));
     orb(img, mask, keypoints, descriptors);
   }
   else if(desc_type == "surf")
   {
     SurfFeatureDetector detector;
-    detector.detect(img, keypoints);
+    detector.detect(img, keypoints, mask);
 
     SurfDescriptorExtractor extractor;
     extractor.compute(img, keypoints, descriptors);
@@ -106,7 +124,7 @@ void KeyframeContainer::ExtractFeatures(std::string desc_type)
   else if(desc_type == "surf_gpu")
   {
     gpu::SURF_GPU surf_gpu;    
-    gpu::GpuMat kps_gpu, mask_gpu, img_gpu(img);
+    gpu::GpuMat kps_gpu, mask_gpu(mask), img_gpu(img);
     surf_gpu(img_gpu, mask_gpu, kps_gpu, descriptors_gpu);
     surf_gpu.downloadKeypoints(kps_gpu, keypoints);
   }

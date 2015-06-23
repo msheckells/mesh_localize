@@ -24,7 +24,7 @@ int main (int argc, char **argv)
   ros::Publisher image_pub = nh.advertise<sensor_msgs::Image>("/virtual_camera/image",1000);
   ros::Publisher depth_pub = nh.advertise<sensor_msgs::Image>("/virtual_camera/depth",1000);
   ros::Publisher info_pub = nh.advertise<sensor_msgs::CameraInfo>("/virtual_camera/camera_info",1000);
-  ros::Rate loop_rate(10);
+  ros::Rate loop_rate(60);
 
   double x = 0;
   double y = 0;

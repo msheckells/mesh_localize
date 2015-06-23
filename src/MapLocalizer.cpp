@@ -66,6 +66,8 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     load_descriptors = false;
   if (!nh_private.getParam ("show_pnp_matches", show_pnp_matches))
     show_pnp_matches = false;
+  if (!nh_private.getParam ("show_debug", show_debug))
+    show_debug = false;
   if (!nh_private.getParam ("show_global_matches", show_global_matches))
     show_global_matches = false;
   if (!nh_private.getParam("descriptor_filename", descriptor_filename))
@@ -160,6 +162,8 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   K << msg->K[0], msg->K[1], msg->K[2],
                  msg->K[3], msg->K[4], msg->K[5],
                  msg->K[6], msg->K[7], msg->K[8];
+  K_scaled = image_scale * K;
+  K_scaled(2,2) = 1;
   distcoeff = Eigen::VectorXf(5);
   distcoeff << msg->D[0], msg->D[1], msg->D[2], msg->D[3], msg->D[4];
   distcoeffcv = (Mat_<double>(5,1) << distcoeff(0), distcoeff(1), distcoeff(2), distcoeff(3), distcoeff(4)); 
@@ -235,7 +239,7 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   localize_state = INIT;
 
   spin_time = ros::Time::now();
-  timer = nh_private.createTimer(ros::Duration(0.04), &MapLocalizer::spin, this);
+  timer = nh_private.createTimer(ros::Duration(0.01), &MapLocalizer::spin, this);
 }
 
 MapLocalizer::~MapLocalizer()
@@ -257,13 +261,13 @@ void MapLocalizer::HandleImage(const sensor_msgs::ImageConstPtr& msg)
     ros::Time start = ros::Time::now();
     cv_bridge::CvImageConstPtr cvImg = cv_bridge::toCvShare(msg);
     Mat img_undistort;
+    Mat image = cvImg->image;
     //undistort(cvImg->image, current_image, Kcv_undistort, distcoeffcv);
     if(image_scale != 1.0)
     {
-      resize(cvImg->image, img_undistort, Size(0,0), image_scale, image_scale);
-      //resize(current_image, current_image, Size(0,0), image_scale, image_scale);
+      resize(image, image, Size(0,0), image_scale, image_scale);
     }
-    undistort(img_undistort, current_image, Kcv, distcoeffcv);
+    undistort(image, current_image, Kcv, distcoeffcv);
     ROS_INFO("Image copy time: %f", (ros::Time::now()-start).toSec());  
     get_frame = false;
   }
@@ -367,15 +371,16 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
     // ASift initialization with PnP localization
     if(localize_state == PNP)
     {
-      start = ros::Time::now();
-      KeyframeContainer* kf = new KeyframeContainer(current_image, pnp_descriptor_type);
-      ROS_INFO("Descriptor extraction time: %f", (ros::Time::now()-start).toSec());  
+      //start = ros::Time::now();
+      KeyframeContainer* kf = new KeyframeContainer(current_image, pnp_descriptor_type, false);
+      //ROS_INFO("Descriptor extraction time: %f", (ros::Time::now()-start).toSec());  
       
       ROS_INFO("Performing local PnP search...");
-      Eigen::Matrix4f imgTf;
+      Eigen::Matrix4f imgTf, fakeTf;
       
+      //FindImageTfVirtualEdges(kf, currentPose, fakeTf, true);
       ros::Time start = ros::Time::now();
-      if(!FindImageTfVirtualPnp(kf, currentPose, imgTf, pnp_descriptor_type))
+      if(!FindImageTfVirtualPnp(kf, currentPose, imgTf, pnp_descriptor_type, true))
       {
         numPnpRetrys++;
         if(numPnpRetrys > 1)
@@ -409,7 +414,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       ROS_INFO("Descriptor extraction time: %f", (ros::Time::now()-start).toSec());  
 
       ros::Time start = ros::Time::now();
-      if(!FindImageTfVirtualPnp(kf, currentPose, imgTf, img_match_descriptor_type))
+      if(!FindImageTfVirtualPnp(kf, currentPose, imgTf, img_match_descriptor_type, false))
       {
         ROS_INFO("PnP failed, reinitializing using last known pose");
         localize_state = LOCAL_INIT;
@@ -900,7 +905,210 @@ std::vector<Point3d> MapLocalizer::PCLToPoint3d(const std::vector<pcl::PointXYZ>
   return points;
 }
 
-bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f vimgTf, Eigen::Matrix4f& tf, std::string vdesc_type)
+void MapLocalizer::ReprojectMask(Mat& dst, const Mat& src, const Eigen::Matrix3f& dstK, const Eigen::Matrix3f& srcK, const Mat& src_depth)
+{
+  for(int i = 0; i < src.rows; i++)
+  {
+    for(int j = 0; j < src.cols; j++)
+    {
+      if(src.at<uchar>(i,j) != 255)
+        continue;
+      Eigen::Vector3f src_pt(j, i, 1);
+      src_pt = srcK.inverse()*src_pt;
+      src_pt = (src_depth.at<float>(i,j)/src_pt(2))*src_pt;
+
+      Eigen::Vector3f dst_pt = dstK*src_pt;
+      dst_pt = dst_pt/dst_pt(2);
+      int dst_x = floor(dst_pt(0));
+      int dst_y = floor(dst_pt(1));
+      if(dst_x < 0 || dst_x >= dst.cols || dst_y < 0 || dst_y >= dst.rows)
+        continue;
+      
+      dst.at<uchar>(dst_y, dst_x) = src.at<uchar>(i,j);
+    }
+  }
+  
+  medianBlur(dst, dst, 3);
+}  
+
+void MapLocalizer::CalcImageGradientDirection(Mat& dst, const Mat& src)
+{
+  dst = Mat(src.rows, src.cols, CV_32F, Scalar(0));
+
+  Mat grad_x, grad_y;
+  /// Gradient X
+  cv::Sobel(src, grad_x, CV_32F, 1, 0, 3);
+
+  /// Gradient Y
+  cv::Sobel(src, grad_y, CV_32F, 0, 1, 3);
+  
+  for(int i = 0; i < src.rows; i++)
+  {
+    for(int j = 0; j < src.cols; j++)
+    {
+      dst.at<float>(i,j) = atan2(grad_y.at<float>(i,j), grad_x.at<float>(i,j));
+    }
+  }
+}
+
+void MapLocalizer::DrawGradientLines(Mat& dst, const Mat& src, const Mat& edges, const Mat& gdir)
+{
+  cvtColor(src, dst, CV_GRAY2RGB);
+  for(int i = 6; i < src.rows-6; i++)
+  {
+    for(int j = 6; j < src.cols-6; j++)
+    {
+      if(edges.at<uchar>(i,j) == 255)
+      {
+        float gd = gdir.at<float>(i,j);
+        Point p1(j - 5*cos(gd), i - 5*sin(gd));
+        Point p2(j + 5*cos(gd), i + 5*sin(gd));
+        line(dst, p1, p2, CV_RGB(255, 0, 0));
+      }
+    }
+  }
+}
+
+bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix4f vimgTf, Eigen::Matrix4f& tf, bool mask_kf)
+{
+  tf = Eigen::MatrixXf::Identity(4,4);
+
+  // Get virtual image and depth map
+  Mat depth, mask;
+  Mat vimg;
+  Eigen::Matrix3f vimgK;
+  ros::Time start = ros::Time::now();
+  if(virtual_image_source == "gazebo")
+  {
+    vimgK = virtual_K; 
+    vimg = GetVirtualImageFromTopic(depth, mask);
+  }
+  else if(virtual_image_source == "ogre" || virtual_image_source == "point_cloud")
+  {
+    vimgK = vig->GetK(); 
+    vimg = vig->GenerateVirtualImage(vimgTf, depth, mask);
+  }
+  else
+  {
+    ROS_ERROR("Invalid virtual_image_source");
+    return false;
+  }
+  ROS_INFO("VirtualEdges: generate virtual img time: %f", (ros::Time::now()-start).toSec());
+  
+  double canny_high_thresh = 180;
+  double canny_low_thresh = 60;
+  Mat kf_detected_edges, vimg_detected_edges;
+  if(mask_kf)
+  {
+    Mat kf_detected_edges_temp;
+    start = ros::Time::now();
+    //blur(kfc->GetImage(), kf_detected_edges_temp, Size(3,3));
+    Canny(kfc->GetImage(), kf_detected_edges_temp, canny_low_thresh, canny_high_thresh, 3);
+    ROS_INFO("Edge extraction time: %f", (ros::Time::now()-start).toSec());  
+
+    Mat reproj_mask = Mat(kfc->GetImage().rows, kfc->GetImage().cols, CV_8U, Scalar(0));
+    start = ros::Time::now();
+    ReprojectMask(reproj_mask, mask, K_scaled, vimgK, depth);
+    ROS_INFO("VirtualEdges: reproject mask time: %f", (ros::Time::now()-start).toSec());
+    kfc->SetMask(reproj_mask);
+
+    kf_detected_edges_temp.copyTo(kf_detected_edges, reproj_mask);
+    
+    
+    //namedWindow( "Reproj Mask", WINDOW_NORMAL );// Create a window for display.
+    //imshow( "Reproj Mask", reproj_mask ); 
+    if(show_debug)
+    {
+      Mat query_masked;
+      kfc->GetImage().copyTo(query_masked, reproj_mask);
+      namedWindow( "Query Masked", WINDOW_NORMAL );// Create a window for display.
+      imshow( "Query Masked", query_masked ); 
+    }
+  }
+  else 
+  {
+    //blur(kfc->GetImage(), kf_detected_edges, Size(3,3));
+    Canny(kfc->GetImage(), kf_detected_edges, canny_low_thresh, canny_high_thresh, 3);
+  }
+
+  Mat vimg_detected_edges_temp;
+  Canny(vimg, vimg_detected_edges_temp, canny_low_thresh, canny_high_thresh, 3);
+  vimg_detected_edges_temp.copyTo(vimg_detected_edges, mask);
+
+  Mat vimg_edge_dir;
+  CalcImageGradientDirection(vimg_edge_dir, vimg_detected_edges);
+
+  //Reproject virtual edges to camera. Get all edge points in vimg
+  Mat reproj_edges = Mat(kfc->GetImage().rows, kfc->GetImage().cols, CV_8U, Scalar(0));
+  ReprojectMask(reproj_edges, vimg_detected_edges, K_scaled, vimgK, depth);
+  Mat edgePts;
+  findNonZero(reproj_edges, edgePts);
+  //Do 1D search along gradient direction to find closest edge in kf
+  int dmax = sqrt(reproj_edges.rows*reproj_edges.rows + reproj_edges.cols*reproj_edges.cols);
+  for(int i = 0; i < edgePts.total(); i++)
+  {
+    Point pt = edgePts.at<Point>(i);
+    for(int d = 0; d < dmax; d++)
+    {
+      float edge_dir = vimg_edge_dir.at<float>(pt.y,pt.x);
+      int x_idx = pt.x + d*cos(edge_dir);
+      int y_idx = pt.y + d*sin(edge_dir);
+      if(x_idx < 0 || x_idx >= kf_detected_edges.cols || y_idx < 0 || y_idx >= kf_detected_edges.rows)
+        continue;
+      
+      if(kf_detected_edges.at<uchar>(y_idx, x_idx) == 255)
+      {
+        // Found correspondence
+        // Back project vimg point to 3D
+        // Store KF 2D correspondence
+        continue;
+      }
+      x_idx = pt.x - d*cos(edge_dir);
+      y_idx = pt.y - d*sin(edge_dir);
+      if(x_idx < 0 || x_idx >= kf_detected_edges.cols || y_idx < 0 || y_idx >= kf_detected_edges.rows)
+        continue;
+      if(kf_detected_edges.at<uchar>(y_idx, x_idx) == 255)
+      {
+        // Found correspondence
+        // Back project vimg point to 3D
+        // Store KF 2D correspondence
+      }
+    }
+  }
+#if 1
+  //if(show_debug)
+  {
+    Mat depth_im;
+    double min_depth, max_depth;
+    minMaxLoc(depth, &min_depth, &max_depth);    
+    //std::cout << "min_depth=" << min_depth << " max_depth=" << max_depth << std::endl;
+    depth.convertTo(depth_im, CV_8U, 255.0/(max_depth-min_depth), 0);// -min_depth*255.0/(max_depth-min_depth));
+
+    Mat edge_dir_im;
+    DrawGradientLines(edge_dir_im, vimg_detected_edges, vimg_detected_edges, vimg_edge_dir); 
+
+    namedWindow( "Query", WINDOW_NORMAL );// Create a window for display.
+    imshow( "Query", kfc->GetImage() ); 
+    namedWindow( "Virtual", WINDOW_NORMAL );// Create a window for display.
+    imshow( "Virtual", vimg ); 
+    namedWindow( "Depth", WINDOW_NORMAL );// Create a window for display.
+    imshow( "Depth", depth_im ); 
+    namedWindow( "Query Edges", WINDOW_NORMAL );// Create a window for display.
+    imshow( "Query Edges", kf_detected_edges ); 
+    namedWindow( "Virtual Edges", WINDOW_NORMAL );// Create a window for display.
+    imshow( "Virtual Edges", vimg_detected_edges ); 
+    namedWindow( "Virtual Edge Directions", WINDOW_NORMAL );// Create a window for display.
+    imshow( "Virtual Edge Directions", edge_dir_im ); 
+    //namedWindow( "Mask", WINDOW_NORMAL );// Create a window for display.
+    //imshow( "Mask", mask ); 
+    waitKey(1);
+  }
+#endif
+}
+
+
+
+bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f vimgTf, Eigen::Matrix4f& tf, std::string vdesc_type, bool mask_kf)
 {
   tf = Eigen::MatrixXf::Identity(4,4);
 
@@ -926,23 +1134,45 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
   }
   ROS_INFO("VirtualPnP: generate virtual img time: %f", (ros::Time::now()-start).toSec());
   
-#if 0
-  Mat depth_im;
-  double min_depth, max_depth;
-  minMaxLoc(depth, &min_depth, &max_depth);    
-  //std::cout << "min_depth=" << min_depth << " max_depth=" << max_depth << std::endl;
-  depth.convertTo(depth_im, CV_8U, 255.0/(max_depth-min_depth), 0);// -min_depth*255.0/(max_depth-min_depth));
+  if(mask_kf)
+  {
+    Mat reproj_mask = Mat(kfc->GetImage().rows, kfc->GetImage().cols, CV_8U, Scalar(0));
+    start = ros::Time::now();
+    ReprojectMask(reproj_mask, mask, K_scaled, vimgK, depth);
+    ROS_INFO("VirtualPnP: reproject mask time: %f", (ros::Time::now()-start).toSec());
+    kfc->SetMask(reproj_mask);
+    
+    start = ros::Time::now();
+    kfc->ExtractFeatures();
+    ROS_INFO("Descriptor extraction time: %f", (ros::Time::now()-start).toSec());  
+    //namedWindow( "Reproj Mask", WINDOW_NORMAL );// Create a window for display.
+    //imshow( "Reproj Mask", reproj_mask ); 
+    if(show_debug)
+    {
+      Mat query_masked;
+      kfc->GetImage().copyTo(query_masked, reproj_mask);
+      namedWindow( "Query Masked", WINDOW_NORMAL );// Create a window for display.
+      imshow( "Query Masked", query_masked ); 
+    }
+  }
+  if(show_debug)
+  {
+    Mat depth_im;
+    double min_depth, max_depth;
+    minMaxLoc(depth, &min_depth, &max_depth);    
+    //std::cout << "min_depth=" << min_depth << " max_depth=" << max_depth << std::endl;
+    depth.convertTo(depth_im, CV_8U, 255.0/(max_depth-min_depth), 0);// -min_depth*255.0/(max_depth-min_depth));
 
-  namedWindow( "Query", WINDOW_NORMAL );// Create a window for display.
-  imshow( "Query", kfc->GetImage() ); 
-  namedWindow( "Virtual", WINDOW_NORMAL );// Create a window for display.
-  imshow( "Virtual", vimg ); 
-  namedWindow( "Depth", WINDOW_NORMAL );// Create a window for display.
-  imshow( "Depth", depth_im ); 
-  namedWindow( "Mask", WINDOW_NORMAL );// Create a window for display.
-  imshow( "Mask", mask ); 
-  waitKey(0);
-#endif
+    namedWindow( "Query", WINDOW_NORMAL );// Create a window for display.
+    imshow( "Query", kfc->GetImage() ); 
+    namedWindow( "Virtual", WINDOW_NORMAL );// Create a window for display.
+    imshow( "Virtual", vimg ); 
+    namedWindow( "Depth", WINDOW_NORMAL );// Create a window for display.
+    imshow( "Depth", depth_im ); 
+    //namedWindow( "Mask", WINDOW_NORMAL );// Create a window for display.
+    //imshow( "Mask", mask ); 
+    waitKey(1);
+  }
 
   // Find features in virtual image
   std::vector<KeyPoint> vkps;

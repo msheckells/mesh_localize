@@ -20,7 +20,7 @@ using namespace cv;
 class KeyframeContainer
 {
 public:
-  KeyframeContainer(Mat img, std::string desc_type = "asurf");
+  KeyframeContainer(Mat img, std::string desc_type = "asurf", bool extract_now = true);
   KeyframeContainer(Mat img, std::vector<KeyPoint>& keypoints, Mat& descriptors);
   KeyframeContainer(Mat img, std::vector<KeyPoint>& keypoints, Mat& descriptors, Mat& depth);
   KeyframeContainer(CameraContainer* cc, std::string desc_type = "asurf");
@@ -36,6 +36,9 @@ public:
   std::vector<KeyPoint> GetKeypoints();
   Eigen::Matrix4f GetTf();
   Eigen::Matrix3f GetK();
+
+  void ExtractFeatures();
+  void SetMask(Mat new_mask);
 private:
 
   void ExtractFeatures(std::string desc_type);
@@ -45,6 +48,8 @@ private:
   Mat descriptors;
   gpu::GpuMat descriptors_gpu;
   Mat depth; //May not be used
+  Mat mask;
+  string desc_type;
 
   bool delete_cc;
   bool has_depth;
