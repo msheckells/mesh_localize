@@ -13,6 +13,7 @@
 #include "KeyframeContainer.h"
 #include "KeyframeMatch.h"
 #include "MapFeatures.h"
+#include "EdgeTrackingUtil.h"
 
 #include "pcl_ros/point_cloud.h"
 #include <pcl/point_cloud.h>
@@ -64,6 +65,7 @@ private:
     const Eigen::Matrix3f& srcK, const cv::Mat& src_depth);
   void CalcImageGradientDirection(Mat& dst, const Mat& src);
   void DrawGradientLines(Mat& dst, const Mat& src, const Mat& edges, const Mat& gdir);
+  void DrawEdgeMatching(Mat& dst, const Mat& src, const vector<EdgeTrackingUtil::SamplePoint>& sps);
 
   std::vector<CameraContainer*> cameras;
   

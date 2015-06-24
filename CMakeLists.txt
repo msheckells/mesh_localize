@@ -142,6 +142,7 @@ add_library(map_localize
                                   src/MapFeatures.cpp
                                   src/ImageDbUtil.cpp
                                   src/PnPUtil.cpp
+                                  src/EdgeTrackingUtil.cpp
                                   src/OgreImageGenerator.cpp
                                   src/PointCloudImageGenerator.cpp
                                   src/FeatureMatchLocalizer.cpp

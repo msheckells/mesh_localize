@@ -7,7 +7,7 @@
 		<param name="show_pnp_matches" type="bool" value="false"/>
 		<param name="show_global_matches" type="bool" value="true"/>
 		<param name="virtual_image_source" type="string" value="ogre"/>
-		<param name="pnp_descriptor_type" type="string" value="surf"/>
+		<param name="pnp_descriptor_type" type="string" value="surf_gpu"/>
 		<param name="img_match_descriptor_type" type="string" value="surf"/>
 		<param name="global_localization_alg" type="string" value="depth_feature_match"/>
 		<param name="ogre_data_dir" type="string" value="$(find map_localize)/data/box"/>

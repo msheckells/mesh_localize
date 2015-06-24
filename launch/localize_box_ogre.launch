@@ -4,6 +4,7 @@
 		<remap from="image" to="/camera/image_mono" />
 		<remap from="camera_info" to="/camera/camera_info" />
 
+		<param name="show_debug" type="bool" value="true"/>
 		<param name="show_pnp_matches" type="bool" value="true"/>
 		<param name="show_global_matches" type="bool" value="true"/>
 		<param name="virtual_image_source" type="string" value="ogre"/>

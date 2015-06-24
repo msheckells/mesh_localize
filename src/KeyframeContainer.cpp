@@ -109,7 +109,7 @@ void KeyframeContainer::ExtractFeatures(std::string desc_type)
   }  
   else if(desc_type == "orb")
   {
-    ORB orb(1000);
+    ORB orb(1000, 1.2f, 4);
     orb(img, mask, keypoints, descriptors);
   }
   else if(desc_type == "surf")
