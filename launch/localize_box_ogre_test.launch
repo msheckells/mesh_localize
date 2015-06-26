@@ -1,5 +1,7 @@
 <launch>
-	<node name="render" pkg="map_localize" type="render_node" output="screen"/>
+	<node name="render" pkg="map_localize" type="render_node" output="screen">
+		<param name="step_size" type="double" value="0.2"/>
+	</node>
         <!-- Start map_localize_node -->
 	<node name="map_localize" pkg="map_localize" type="map_localize_node" output="screen" >
                 <remap from="image" to="/virtual_camera/image" />

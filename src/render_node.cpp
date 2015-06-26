@@ -16,6 +16,11 @@ int main (int argc, char **argv)
   ros::NodeHandle nh;
   ros::NodeHandle nh_private("~");
 
+  double step_size;
+
+  if(!nh_private.getParam("step_size", step_size))
+    step_size = 0.1;
+
   std::string resource_path = ros::package::getPath("map_localize");
   resource_path += "/ogre_cfg/";
   OgreImageGenerator oig(resource_path,"box.mesh");
@@ -32,7 +37,6 @@ int main (int argc, char **argv)
   double xybound = 4;
   double zubound = 12;
   double zlbound = 8;
-  double step_size = 0.3;
   while(ros::ok())
   {
     Mat depth, mask;

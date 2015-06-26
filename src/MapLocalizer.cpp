@@ -89,6 +89,10 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     global_localization_alg = "feature_match";
   if(!nh_private.getParam("image_scale", image_scale))
     image_scale = 1.0;
+  if(!nh_private.getParam("canny_high_thresh", canny_high_thresh))
+    canny_high_thresh = 200;
+  if(!nh_private.getParam("canny_low_thresh", canny_low_thresh))
+    canny_low_thresh = 80;
   
 
   //TODO: read from param file.  Hard-coded, based on DSLR
@@ -370,23 +374,41 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
   if(!get_frame && !get_virtual_image && !get_virtual_depth)
   {
     // ASift initialization with PnP localization
-    if(localize_state == PNP)
+    if(localize_state == EDGES)
+    {
+      KeyframeContainer* kf = new KeyframeContainer(current_image, pnp_descriptor_type, false);
+      ROS_INFO("Performing local Edge search...");
+      start = ros::Time::now();
+      Eigen::Matrix4f imgTf;
+      if(!FindImageTfVirtualEdges(kf, currentPose, imgTf, true))
+      {
+        localize_state = PNP;
+        delete kf;
+        return;
+      }
+      ROS_INFO("FindImageTfVirtualEdges time: %f", (ros::Time::now()-start).toSec());  
+      currentPose = imgTf;
+      UpdateVirtualSensorState(currentPose);
+      PublishPose(currentPose);
+      //std::cout << "Estimated tf: " << std::endl << imgTf << std::endl;
+      //std::cout << "Actual tf: " << std::endl << kf->GetTf() << std::endl;
+      positionList.push_back(imgTf.block<3,1>(0,3));
+      PublishTfViz(imgTf, kf->GetTf());
+      ROS_INFO("Found image tf");
+      delete kf;
+    }
+    else if(localize_state == PNP)
     {
       //start = ros::Time::now();
       KeyframeContainer* kf = new KeyframeContainer(current_image, pnp_descriptor_type, false);
       //ROS_INFO("Descriptor extraction time: %f", (ros::Time::now()-start).toSec());  
       
       ROS_INFO("Performing local PnP search...");
-      Eigen::Matrix4f imgTf, fakeTf;
+      Eigen::Matrix4f imgTf;
       
-      ros::Time start;// = ros::Time::now();
-     // FindImageTfVirtualEdges(kf, currentPose, fakeTf, true);
-     // ROS_INFO("FindImageTfVirtualEdges time: %f", (ros::Time::now()-start).toSec());  
-     // std::cout << "Edges Pose=" << std::endl << fakeTf << std::endl;
 
-      start = ros::Time::now();
+      ros::Time start = ros::Time::now();
       if(!FindImageTfVirtualPnp(kf, currentPose, imgTf, pnp_descriptor_type, true))
-      //if(!FindImageTfVirtualEdges(kf, currentPose, imgTf, true))
       {
         numPnpRetrys++;
         if(numPnpRetrys > 1)
@@ -400,6 +422,10 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       }
       numPnpRetrys = 0;
       ROS_INFO("FindImageTfVirtualPnp time: %f", (ros::Time::now()-start).toSec());  
+      if(pnpReprojError < 1.0)
+      {
+        localize_state = EDGES;
+      }
       currentPose = imgTf;
       UpdateVirtualSensorState(currentPose);
       PublishPose(currentPose);
@@ -864,7 +890,7 @@ std::vector<pcl::PointXYZ> MapLocalizer::GetPointCloudFromFrames(KeyframeContain
   std::vector<KeyPoint> matchKps2;
 
 
-  double* reprojError = new double;
+  double reprojError;
   // Use ratio test to find good keypoint matches
   for(unsigned int j = 0; j < matches.size(); j++)
   {
@@ -873,10 +899,10 @@ std::vector<pcl::PointXYZ> MapLocalizer::GetPointCloudFromFrames(KeyframeContain
     {
       Point2f pt1 = kfc1->GetKeypoints()[matches[j][0].queryIdx].pt;
       Point2f pt2 = kfc2->GetKeypoints()[matches[j][0].trainIdx].pt;
-      Mat_<double> triPt = LinearLSTriangulation(Point3d(pt1.x, pt1.y, 1), Kcv33*P, Point3d(pt2.x, pt2.y, 1), Kcv33*P1, reprojError);
+      Mat_<double> triPt = LinearLSTriangulation(Point3d(pt1.x, pt1.y, 1), Kcv33*P, Point3d(pt2.x, pt2.y, 1), Kcv33*P1, &reprojError);
       //std::cout << "Reproj Error: " << *reprojError << std::endl;
 
-      if(*reprojError < 1.)
+      if(reprojError < 1.)
       {
         pc.push_back(pcl::PointXYZ(triPt(0), triPt(1), triPt(2)));
       
@@ -887,7 +913,6 @@ std::vector<pcl::PointXYZ> MapLocalizer::GetPointCloudFromFrames(KeyframeContain
     }
   }
   
-  delete reprojError;
  
 #if 0
   namedWindow("matches", 1);
@@ -965,7 +990,10 @@ void MapLocalizer::DrawEdgeMatching(Mat& dst, const Mat& src, const vector<EdgeT
   {
      line(dst, Point(sps[i].coord2.x, sps[i].coord2.y), Point(sps[i].edge_pt2.x, sps[i].edge_pt2.y),
        CV_RGB(255, 0, 0));
-     circle(dst, Point(sps[i].coord2.x, sps[i].coord2.y), 3, CV_RGB(0, 255, 0));
+  }
+  for(int i = 0; i < sps.size(); i++)
+  {
+     circle(dst, Point(sps[i].coord2.x, sps[i].coord2.y), 1, CV_RGB(0, 255, 0));
   }
 }
 
@@ -1014,8 +1042,6 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
   ROS_INFO("VirtualEdges: generate virtual img time: %f", (ros::Time::now()-start).toSec());
   
   // Get edges from vimg and kf using canny
-  double canny_high_thresh = 110;
-  double canny_low_thresh = 40;
   Mat kf_detected_edges, vimg_detected_edges;
   if(mask_kf)
   {
@@ -1065,6 +1091,7 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
 
   //Do 1D search along gradient direction to find closest edge in kf for each edge pt in vimg
   int dmax = 20;//sqrt(kf_detected_edges.rows*kf_detected_edges.rows + kf_detected_edges.cols*kf_detected_edges.cols);
+  double avgError = 0;
   std::vector<EdgeTrackingUtil::SamplePoint> sps;
   for(int i = 0; i < edgePts.total(); i++)
   {
@@ -1091,16 +1118,16 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
         sp.dx = cos(edge_dir);
         sp.dy = sin(edge_dir);
         sp.nuv = cvPoint2D32f(cos(edge_dir), sin(edge_dir));
-        
+        avgError += sp.dist;
         // Back project vimg point to 3D
-        double p_cam_depth = depth.at<float>(int(pt.x), int(pt.y));
+        double p_cam_depth = depth.at<float>(int(pt.y), int(pt.x));
         Eigen::Vector3f p_cam = vimgK.inverse()*Eigen::Vector3f(pt.x,pt.y,1); 
         p_cam *= p_cam_depth/p_cam(2);
         Eigen::Vector4f p_world(p_cam(0), p_cam(1), p_cam(2), 1);
         p_world = vimgTf*p_world;
         sp.coord3 = cvPoint3D32f(p_world(0), p_world(1), p_world(2));    
         sps.push_back(sp);
-        continue;
+        break;
       }
       x_idx = p_kf(0) - d*cos(edge_dir);
       y_idx = p_kf(1) - d*sin(edge_dir);
@@ -1117,18 +1144,21 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
         sp.dx = -cos(edge_dir);
         sp.dy = -sin(edge_dir);
         sp.nuv = cvPoint2D32f(-cos(edge_dir), -sin(edge_dir));
+        avgError += sp.dist;
         
         // Back project vimg point to 3D
-        double p_cam_depth = depth.at<float>(int(pt.x), int(pt.y));
+        double p_cam_depth = depth.at<float>(int(pt.y), int(pt.x));
         Eigen::Vector3f p_cam = vimgK.inverse()*Eigen::Vector3f(pt.x,pt.y,1); 
         p_cam *= p_cam_depth/p_cam(2);
         Eigen::Vector4f p_world(p_cam(0), p_cam(1), p_cam(2), 1);
         p_world = vimgTf*p_world;
         sp.coord3 = cvPoint3D32f(p_world(0), p_world(1), p_world(2));    
         sps.push_back(sp);
+        break;
       }
     }
   }
+  avgError /= sps.size();
 
   if(show_debug)
   {
@@ -1163,7 +1193,14 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
     waitKey(1);
   }
 
-  EdgeTrackingUtil::getEstimatedPoseIRLS(tf, vimgTf, sps, K_scaled);
+  
+  if(avgError > 15 || sps.size() < 15)
+    return false;
+  
+  ROS_INFO("VirtualEdges: avg matching error: %f", avgError);
+  EdgeTrackingUtil::getEstimatedPoseIRLS(tf, vimgTf.inverse(), sps, K_scaled);
+  tf = tf.inverse();
+
 
   return true;
 }
@@ -1392,9 +1429,8 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
   Eigen::Matrix4f tfran;
   //solvePnPRansac(matchPts3d, matchPts, Kcv, 
   std::vector<int> inlierIdx;
-  double finalReprojError;
   start = ros::Time::now();
-  if(!PnPUtil::RansacPnP(matchPts3d, matchPts, Kcv, vimgTf.inverse(), tfran, inlierIdx, &finalReprojError))
+  if(!PnPUtil::RansacPnP(matchPts3d, matchPts, Kcv, vimgTf.inverse(), tfran, inlierIdx, &pnpReprojError))
   {
     return false;
   }
@@ -1413,7 +1449,7 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
   }
 
   ROS_INFO("VirtualPnP: Ransac PnP time: %f", (ros::Time::now()-start).toSec());
-  ROS_INFO("VirtualPnP: found match. Average reproj error = %f", finalReprojError);
+  ROS_INFO("VirtualPnP: found match. Average reproj error = %f", pnpReprojError);
   tf = tfran.inverse();
   return true;
 }

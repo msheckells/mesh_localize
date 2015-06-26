@@ -27,7 +27,8 @@ class MapLocalizer
     INIT,
     INIT_PNP,
     LOCAL_INIT,
-    PNP
+    PNP,
+    EDGES
   } localize_state;
 
 public:
@@ -81,6 +82,7 @@ private:
   bool get_virtual_depth;
   int numPnpRetrys;
   int numLocalizeRetrys;
+  double pnpReprojError;
 
   MonocularLocalizer* localization_init;
   VirtualImageGenerator* vig;
@@ -103,6 +105,8 @@ private:
   bool show_debug;
   std::string global_localization_alg;
   double image_scale;
+  double canny_high_thresh;
+  double canny_low_thresh;
 
   ros::NodeHandle nh;
   ros::NodeHandle nh_private;
