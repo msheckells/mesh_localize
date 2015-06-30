@@ -249,6 +249,7 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     namedWindow( "PnP Match Inliers", WINDOW_NORMAL );
   }
 
+  ResetMotionModel();
   localize_state = INIT;
 
   spin_time = ros::Time::now();
@@ -374,6 +375,25 @@ void MapLocalizer::PublishPose(Eigen::Matrix4f tf)
   br.sendTransform(tf::StampedTransform(tf_transform.inverse(), img_time_stamp, "world", "object_pose"));
 }
 
+// decaying velocity model
+void MapLocalizer::UpdateMotionModel(const Eigen::Matrix4f& oldTf, const Eigen::Matrix4f& newTf, double dt)
+{
+  Eigen::Matrix4f new_from_old = newTf*oldTf.inverse();
+  Eigen::Matrix4f cam_motion = new_from_old.log()/dt;
+  Eigen::Matrix4f old_cam_vel = camera_velocity;
+  camera_velocity = 0.9 * (0.5 * cam_motion + 0.5 * old_cam_vel);
+}
+
+Eigen::Matrix4f MapLocalizer::ApplyMotionModel(double dt)
+{
+  return (dt*camera_velocity).exp()*currentPose;
+}
+
+void MapLocalizer::ResetMotionModel()
+{
+  camera_velocity = Eigen::MatrixXf::Zero(4,4);
+}
+
 void MapLocalizer::spin(const ros::TimerEvent& e)
 {
   PublishMap();
@@ -381,19 +401,27 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
   ros::Time start;
   if(!get_frame && !get_virtual_image && !get_virtual_depth)
   {
-    // ASift initialization with PnP localization
+    ros::Time current_time = ros::Time::now();
+    double dt = (current_time - last_spin_time).toSec();
+    last_spin_time = current_time;
+    // Feature-based initialization with PnP localization (or edge tracking)
     if(localize_state == EDGES)
     {
       KeyframeContainer* kf = new KeyframeContainer(current_image, pnp_descriptor_type, false);
       ROS_INFO("Performing local Edge search...");
       start = ros::Time::now();
       Eigen::Matrix4f imgTf;
-      if(!FindImageTfVirtualEdges(kf, currentPose, imgTf, true))
+     
+      if(!FindImageTfVirtualEdges(kf, ApplyMotionModel(dt), imgTf, true))
       {
+        ResetMotionModel();
         localize_state = PNP;
         delete kf;
         return;
       }
+      UpdateMotionModel(currentPose, imgTf, dt);
+
+
       ROS_INFO("FindImageTfVirtualEdges time: %f", (ros::Time::now()-start).toSec());  
       currentPose = imgTf;
       UpdateVirtualSensorState(currentPose);
@@ -416,8 +444,9 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       
 
       ros::Time start = ros::Time::now();
-      if(!FindImageTfVirtualPnp(kf, currentPose, imgTf, pnp_descriptor_type, true))
+      if(!FindImageTfVirtualPnp(kf, ApplyMotionModel(dt), imgTf, pnp_descriptor_type, true))
       {
+        ResetMotionModel();
         numPnpRetrys++;
         if(numPnpRetrys > 1)
         {
@@ -428,6 +457,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
         delete kf;
         return;
       }
+      UpdateMotionModel(currentPose, imgTf, dt);
       numPnpRetrys = 0;
       ROS_INFO("FindImageTfVirtualPnp time: %f", (ros::Time::now()-start).toSec());  
       if(enable_edge_tracking && pnpReprojError < 1.0)
@@ -516,7 +546,6 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
     }
     ROS_INFO("Spin time: %f", (ros::Time::now() - spin_time).toSec());
     spin_time = ros::Time::now();
-    std::cout << "Pose=" << std::endl << currentPose << std::endl;
 
     get_frame = true;
   }

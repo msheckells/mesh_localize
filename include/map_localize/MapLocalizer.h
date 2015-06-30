@@ -45,6 +45,10 @@ private:
   Mat GetVirtualImageFromTopic(Mat& depths, Mat& mask);
   Mat GenerateVirtualImage(Eigen::Matrix4f tf, Eigen::Matrix3f K, int height, int width, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud, Mat& depth, Mat& mask);
 
+  void UpdateMotionModel(const Eigen::Matrix4f& olfTf, const Eigen::Matrix4f& newTf, double dt);
+  Eigen::Matrix4f ApplyMotionModel(double dt);
+  void ResetMotionModel();
+
   void PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImgTf);
   void PublishPose(Eigen::Matrix4f tf);
   void PublishSfmMatchViz(std::vector<KeyframeMatch > matches, std::vector< Eigen::Vector3f > tvecs);
@@ -125,6 +129,9 @@ private:
   ros::Subscriber virtual_depth_sub;
 
   ros::Timer timer;
+
+  Eigen::Matrix4f camera_velocity;
+  ros::Time last_spin_time;
 
   Eigen::Matrix3f K;
   Eigen::Matrix3f K_scaled;
