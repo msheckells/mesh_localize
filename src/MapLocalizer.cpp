@@ -93,7 +93,15 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     canny_high_thresh = 200;
   if(!nh_private.getParam("canny_low_thresh", canny_low_thresh))
     canny_low_thresh = 80;
+  if(!nh_private.getParam("enable_edge_tracking", enable_edge_tracking))
+    enable_edge_tracking = false;
   
+  if(enable_edge_tracking)
+  {
+    EdgeTrackingUtil::show_debug = show_debug;
+    EdgeTrackingUtil::canny_high_thresh = canny_high_thresh;
+    EdgeTrackingUtil::canny_low_thresh = canny_low_thresh;
+  }
 
   //TODO: read from param file.  Hard-coded, based on DSLR
   map_K << 1799.352269, 0, 1799.029749, 0, 1261.4382272, 957.3402899, 0, 0, 1;
@@ -422,7 +430,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       }
       numPnpRetrys = 0;
       ROS_INFO("FindImageTfVirtualPnp time: %f", (ros::Time::now()-start).toSec());  
-      if(pnpReprojError < 1.0)
+      if(enable_edge_tracking && pnpReprojError < 1.0)
       {
         localize_state = EDGES;
       }
@@ -962,58 +970,7 @@ void MapLocalizer::ReprojectMask(Mat& dst, const Mat& src, const Eigen::Matrix3f
   medianBlur(dst, dst, 3);
 }  
 
-void MapLocalizer::CalcImageGradientDirection(Mat& dst, const Mat& src)
-{
-  dst = Mat(src.rows, src.cols, CV_32F, Scalar(0));
 
-  Mat grad_x, grad_y;
-  /// Gradient X
-  cv::Sobel(src, grad_x, CV_32F, 1, 0, 3);
-
-  /// Gradient Y
-  cv::Sobel(src, grad_y, CV_32F, 0, 1, 3);
-  
-  for(int i = 0; i < src.rows; i++)
-  {
-    for(int j = 0; j < src.cols; j++)
-    {
-      dst.at<float>(i,j) = atan2(grad_y.at<float>(i,j), grad_x.at<float>(i,j));
-      //std::cout << "(" << i << ", " << j << ") " << dst.at<float>(i,j) << " " << grad_y.at<float>(i,j) << " " << grad_x.at<float>(i,j) << std::endl;
-    }
-  }
-}
-
-void MapLocalizer::DrawEdgeMatching(Mat& dst, const Mat& src, const vector<EdgeTrackingUtil::SamplePoint>& sps)
-{
-  cvtColor(src, dst, CV_GRAY2RGB);
-  for(int i = 0; i < sps.size(); i++)
-  {
-     line(dst, Point(sps[i].coord2.x, sps[i].coord2.y), Point(sps[i].edge_pt2.x, sps[i].edge_pt2.y),
-       CV_RGB(255, 0, 0));
-  }
-  for(int i = 0; i < sps.size(); i++)
-  {
-     circle(dst, Point(sps[i].coord2.x, sps[i].coord2.y), 1, CV_RGB(0, 255, 0));
-  }
-}
-
-void MapLocalizer::DrawGradientLines(Mat& dst, const Mat& src, const Mat& edges, const Mat& gdir)
-{
-  cvtColor(src, dst, CV_GRAY2RGB);
-  for(int i = 6; i < src.rows-6; i++)
-  {
-    for(int j = 6; j < src.cols-6; j++)
-    {
-      if(edges.at<uchar>(i,j) == 255)
-      {
-        float gd = gdir.at<float>(i,j);
-        Point p1(j - 5*cos(gd), i - 5*sin(gd));
-        Point p2(j + 5*cos(gd), i + 5*sin(gd));
-        line(dst, p1, p2, CV_RGB(255, 0, 0));
-      }
-    }
-  }
-}
 
 bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix4f vimgTf, Eigen::Matrix4f& tf, bool mask_kf)
 {
@@ -1041,26 +998,17 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
   }
   ROS_INFO("VirtualEdges: generate virtual img time: %f", (ros::Time::now()-start).toSec());
   
-  // Get edges from vimg and kf using canny
-  Mat kf_detected_edges, vimg_detected_edges;
+  Mat kf_mask;
   if(mask_kf)
   {
-    Mat kf_detected_edges_temp;
-    start = ros::Time::now();
-    //blur(kfc->GetImage(), kf_detected_edges_temp, Size(3,3));
-    Canny(kfc->GetImage(), kf_detected_edges_temp, canny_low_thresh, canny_high_thresh, 3);
-    ROS_INFO("Edge extraction time: %f", (ros::Time::now()-start).toSec());  
-
     Mat reproj_mask = Mat(kfc->GetImage().rows, kfc->GetImage().cols, CV_8U, Scalar(0));
-    start = ros::Time::now();
     ReprojectMask(reproj_mask, mask, K_scaled, vimgK, depth);
+
+    //dilate mask so as not to mask good features that may have moved
     int dilate_size = 15;
     Mat element = getStructuringElement(MORPH_RECT, Size(2*dilate_size+1,2*dilate_size+1), Point(dilate_size,dilate_size));
-    dilate(reproj_mask, reproj_mask, element);
-    ROS_INFO("VirtualEdges: reproject mask time: %f", (ros::Time::now()-start).toSec());
-    kfc->SetMask(reproj_mask);
-
-    kf_detected_edges_temp.copyTo(kf_detected_edges, reproj_mask);
+    dilate(reproj_mask, kf_mask, element);
+    kfc->SetMask(kf_mask);
     
     
     //namedWindow( "Reproj Mask", WINDOW_NORMAL );// Create a window for display.
@@ -1068,130 +1016,24 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
     if(show_debug)
     {
       Mat query_masked;
-      kfc->GetImage().copyTo(query_masked, reproj_mask);
+      kfc->GetImage().copyTo(query_masked, kf_mask);
       namedWindow( "Query Masked", WINDOW_NORMAL );// Create a window for display.
       imshow( "Query Masked", query_masked ); 
     }
   }
-  else 
-  {
-    //blur(kfc->GetImage(), kf_detected_edges, Size(3,3));
-    Canny(kfc->GetImage(), kf_detected_edges, canny_low_thresh, canny_high_thresh, 3);
-  }
+  
+  Mat vimg_masked;
+  vimg.copyTo(vimg_masked, mask);
 
-  Mat vimg_detected_edges_temp;
-  Canny(vimg, vimg_detected_edges_temp, canny_low_thresh, canny_high_thresh, 3);
-  vimg_detected_edges_temp.copyTo(vimg_detected_edges, mask);
+  std::vector<EdgeTrackingUtil::SamplePoint> sps = 
+    EdgeTrackingUtil::getEdgeMatches(vimg_masked, kfc->GetImage(), vimgK, K_scaled, depth, kf_mask, vimgTf);
 
-  //Get all edge points in vimg and gradients
-  Mat vimg_edge_dir;
-  CalcImageGradientDirection(vimg_edge_dir, vimg);
-  Mat edgePts;
-  findNonZero(vimg_detected_edges, edgePts);
-
-  //Do 1D search along gradient direction to find closest edge in kf for each edge pt in vimg
-  int dmax = 20;//sqrt(kf_detected_edges.rows*kf_detected_edges.rows + kf_detected_edges.cols*kf_detected_edges.cols);
   double avgError = 0;
-  std::vector<EdgeTrackingUtil::SamplePoint> sps;
-  for(int i = 0; i < edgePts.total(); i++)
+  for(int i = 0; i < sps.size(); i++)
   {
-    Point pt = edgePts.at<Point>(i);
-    for(int d = 0; d < dmax; d++)
-    {
-      float edge_dir = vimg_edge_dir.at<float>(pt.y,pt.x);
-      Eigen::Vector3f p_kf = K_scaled*vimgK.inverse()*Eigen::Vector3f(pt.x,pt.y,1); // reproject to kf frame
-      p_kf /= p_kf(2);
-      
-      int x_idx = p_kf(0) + d*cos(edge_dir);
-      int y_idx = p_kf(1) + d*sin(edge_dir);
-      if(x_idx < 0 || x_idx >= kf_detected_edges.cols || y_idx < 0 || y_idx >= kf_detected_edges.rows)
-        continue;
-      
-      if(kf_detected_edges.at<uchar>(y_idx, x_idx) == 255)
-      {
-        // Found correspondence
-        // Store vimg and KF 2D correspondences
-        EdgeTrackingUtil::SamplePoint sp; 
-        sp.coord2 = cvPoint2D32f(p_kf(0), p_kf(1)); 
-        sp.edge_pt2 = cvPoint2D32f(x_idx, y_idx); 
-        sp.dist = sqrt(pow(p_kf(0) - x_idx,2)+pow(p_kf(1) - y_idx,2));
-        sp.dx = cos(edge_dir);
-        sp.dy = sin(edge_dir);
-        sp.nuv = cvPoint2D32f(cos(edge_dir), sin(edge_dir));
-        avgError += sp.dist;
-        // Back project vimg point to 3D
-        double p_cam_depth = depth.at<float>(int(pt.y), int(pt.x));
-        Eigen::Vector3f p_cam = vimgK.inverse()*Eigen::Vector3f(pt.x,pt.y,1); 
-        p_cam *= p_cam_depth/p_cam(2);
-        Eigen::Vector4f p_world(p_cam(0), p_cam(1), p_cam(2), 1);
-        p_world = vimgTf*p_world;
-        sp.coord3 = cvPoint3D32f(p_world(0), p_world(1), p_world(2));    
-        sps.push_back(sp);
-        break;
-      }
-      x_idx = p_kf(0) - d*cos(edge_dir);
-      y_idx = p_kf(1) - d*sin(edge_dir);
-      if(x_idx < 0 || x_idx >= kf_detected_edges.cols || y_idx < 0 || y_idx >= kf_detected_edges.rows)
-        continue;
-      if(kf_detected_edges.at<uchar>(y_idx, x_idx) == 255)
-      {
-        // Found correspondence
-        // Store vimg and KF 2D correspondences
-        EdgeTrackingUtil::SamplePoint sp; 
-        sp.coord2 = cvPoint2D32f(p_kf(0), p_kf(1)); 
-        sp.edge_pt2 = cvPoint2D32f(x_idx, y_idx); 
-        sp.dist = sqrt(pow(p_kf(0) - x_idx,2)+pow(p_kf(1) - y_idx,2));
-        sp.dx = -cos(edge_dir);
-        sp.dy = -sin(edge_dir);
-        sp.nuv = cvPoint2D32f(-cos(edge_dir), -sin(edge_dir));
-        avgError += sp.dist;
-        
-        // Back project vimg point to 3D
-        double p_cam_depth = depth.at<float>(int(pt.y), int(pt.x));
-        Eigen::Vector3f p_cam = vimgK.inverse()*Eigen::Vector3f(pt.x,pt.y,1); 
-        p_cam *= p_cam_depth/p_cam(2);
-        Eigen::Vector4f p_world(p_cam(0), p_cam(1), p_cam(2), 1);
-        p_world = vimgTf*p_world;
-        sp.coord3 = cvPoint3D32f(p_world(0), p_world(1), p_world(2));    
-        sps.push_back(sp);
-        break;
-      }
-    }
+    avgError += sps[i].dist;
   }
   avgError /= sps.size();
-
-  if(show_debug)
-  {
-    Mat depth_im;
-    double min_depth, max_depth;
-    minMaxLoc(depth, &min_depth, &max_depth);    
-    //std::cout << "min_depth=" << min_depth << " max_depth=" << max_depth << std::endl;
-    depth.convertTo(depth_im, CV_8U, 255.0/(max_depth-min_depth), 0);// -min_depth*255.0/(max_depth-min_depth));
-
-    Mat edge_dir_im;
-    DrawGradientLines(edge_dir_im, vimg_detected_edges, vimg_detected_edges, vimg_edge_dir); 
-
-    Mat edge_matching_overlay;
-    DrawEdgeMatching(edge_matching_overlay, kfc->GetImage(), sps);
-
-    //namedWindow( "Query", WINDOW_NORMAL );// Create a window for display.
-    //imshow( "Query", kfc->GetImage() ); 
-    //namedWindow( "Virtual", WINDOW_NORMAL );// Create a window for display.
-    //imshow( "Virtual", vimg ); 
-    //namedWindow( "Depth", WINDOW_NORMAL );// Create a window for display.
-    //imshow( "Depth", depth_im ); 
-    namedWindow( "Query Edges", WINDOW_NORMAL );// Create a window for display.
-    imshow( "Query Edges", kf_detected_edges ); 
-    namedWindow( "Virtual Edges", WINDOW_NORMAL );// Create a window for display.
-    imshow( "Virtual Edges", vimg_detected_edges ); 
-    namedWindow( "Virtual Edge Directions", WINDOW_NORMAL );// Create a window for display.
-    imshow( "Virtual Edge Directions", edge_dir_im ); 
-    namedWindow( "Edge Matching", WINDOW_NORMAL );// Create a window for display.
-    imshow( "Edge Matching", edge_matching_overlay ); 
-    //namedWindow( "Mask", WINDOW_NORMAL );// Create a window for display.
-    //imshow( "Mask", mask ); 
-    waitKey(1);
-  }
 
   
   if(avgError > 15 || sps.size() < 15)
@@ -1200,7 +1042,6 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
   ROS_INFO("VirtualEdges: avg matching error: %f", avgError);
   EdgeTrackingUtil::getEstimatedPoseIRLS(tf, vimgTf.inverse(), sps, K_scaled);
   tf = tf.inverse();
-
 
   return true;
 }

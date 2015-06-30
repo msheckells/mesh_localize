@@ -64,9 +64,6 @@ private:
   std::vector<Point3d> PCLToPoint3d(const std::vector<pcl::PointXYZ>& cpvec);
   void ReprojectMask(cv::Mat& dst, const cv::Mat& src, const Eigen::Matrix3f& dstK, 
     const Eigen::Matrix3f& srcK, const cv::Mat& src_depth);
-  void CalcImageGradientDirection(Mat& dst, const Mat& src);
-  void DrawGradientLines(Mat& dst, const Mat& src, const Mat& edges, const Mat& gdir);
-  void DrawEdgeMatching(Mat& dst, const Mat& src, const vector<EdgeTrackingUtil::SamplePoint>& sps);
 
   std::vector<CameraContainer*> cameras;
   
@@ -103,6 +100,7 @@ private:
   bool show_pnp_matches;
   bool show_global_matches;
   bool show_debug;
+  bool enable_edge_tracking;
   std::string global_localization_alg;
   double image_scale;
   double canny_high_thresh;

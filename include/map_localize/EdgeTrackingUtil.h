@@ -30,7 +30,21 @@ public:
     int edge_mem;               // Edge membership (0, 1, 2, ... until # of edges -1)
   };
   static void getEstimatedPoseIRLS(Eigen::Matrix4f& pose_cur, const Eigen::Matrix4f& pose_pre, const std::vector<SamplePoint>& vSamplePt, const Eigen::Matrix3f& intrinsics);
-  static TooN::Vector<6> calcJacobian(const CvPoint3D32f& pts3, const CvPoint2D32f& pts2, const CvPoint2D32f& ptsnv, double ptsd, const TooN::SE3<double> &E, const Eigen::Matrix3f& intrinsics);
+  static TooN::Vector<6> calcJacobian(const CvPoint3D32f& pts3, const CvPoint2D32f& pts2, 
+    const CvPoint2D32f& ptsnv, double ptsd, const TooN::SE3<double> &E, 
+    const Eigen::Matrix3f& intrinsics);
+  static std::vector<SamplePoint> getEdgeMatches(const cv::Mat& vimg, const cv::Mat& kf, 
+    const Eigen::Matrix3f vimgK, const Eigen::Matrix3f K, const cv::Mat& vdepth, 
+    const cv::Mat& kf_mask, const Eigen::Matrix4f& vimgTf);
+  static void calcImageGradientDirection(cv::Mat& dst, const cv::Mat& src);
+  static void drawGradientLines(cv::Mat& dst, const cv::Mat& src, const cv::Mat& edges, 
+    const cv::Mat& gdir);
+  static void drawEdgeMatching(cv::Mat& dst, const cv::Mat& src, const std::vector<SamplePoint>& sps);
+  static bool withinOri(float o1, float o2, float oth);
+
+  static bool show_debug;
+  static double canny_high_thresh;
+  static double canny_low_thresh;
 };
 
 #endif

@@ -33,6 +33,8 @@ Mat OgreImageGenerator::GenerateVirtualImage(const Eigen::Matrix4f& pose, cv::Ma
   Eigen::Quaternionf q(pose.block<3,3>(0,0));
   Mat im;
   vih->getVirtualImageAndDepth(im, depth, x, y, z, q.w(), q.x(), q.y(), q.z());
+  //medianBlur(depth, depth, 5);
+  //medianBlur(depth, depth, 5);
   mask = Mat(app->getWindowHeight(), app->getWindowWidth(), CV_8U, Scalar(255));
 
   for(int i = 0; i < app->getWindowHeight(); i++)
