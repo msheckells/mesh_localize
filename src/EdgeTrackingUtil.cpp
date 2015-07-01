@@ -5,6 +5,7 @@
 #include "TooN/se3.h"       // for special Euclidean group
 #include "TooN/wls.h"       // for weighted least square
 #include <opencv2/highgui/highgui.hpp>
+#include <ctime>
 
 
 using namespace TooN;
@@ -30,6 +31,40 @@ bool EdgeTrackingUtil::withinOri(float o1, float o2, float oth)
     return false;
 }
 
+void EdgeTrackingUtil::calcImageGradientDirection(Mat& dst, const Mat& src, const std::vector<Point>& pts)
+{
+  dst = Mat(src.rows, src.cols, CV_32F, Scalar(0)); 
+  std::vector<double> egrads = calcImageGradientDirection(src, pts);
+  for(int i = 0; i < egrads.size(); i++)
+  {
+    dst.at<float>(pts[i].y, pts[i].x) = egrads[i];
+  }
+}
+
+std::vector<double> EdgeTrackingUtil::calcImageGradientDirection(const Mat& src, const std::vector<Point>& pts)
+{
+  std::vector<double> grad_dirs(pts.size());
+  for(int i = 0; i < pts.size(); i++)
+  {
+    Point pt = pts[i];
+    if((pt.x - 1) < 0 || (pt.x+1) >= src.cols || (pt.y-1) < 0 || (pt.y+1) >= src.rows)
+    {
+      grad_dirs[i] = 0;
+    }
+    else
+    {
+      double grad_x = -3*src.at<uchar>(pt.y-1,pt.x-1) +  3*src.at<uchar>(pt.y-1,pt.x+1)
+              -10*src.at<uchar>(pt.y,pt.x-1)   + 10*src.at<uchar>(pt.y,pt.x+1) 
+               -3*src.at<uchar>(pt.y+1,pt.x-1)   + 3*src.at<uchar>(pt.y+1,pt.x+1);
+      double grad_y = -3*src.at<uchar>(pt.y-1,pt.x-1) -10*src.at<uchar>(pt.y-1,pt.x) -3*src.at<uchar>(pt.y-1,pt.x+1)
+                      +3*src.at<uchar>(pt.y+1,pt.x-1) +10*src.at<uchar>(pt.y+1,pt.x) +3*src.at<uchar>(pt.y+1,pt.x+1);
+      grad_dirs[i] = atan2(grad_y, grad_x);
+    }
+  }
+  return grad_dirs;
+}
+
+//SLOW!!!
 void EdgeTrackingUtil::calcImageGradientDirection(Mat& dst, const Mat& src)
 {
   dst = Mat(src.rows, src.cols, CV_32F, Scalar(0));
@@ -65,6 +100,18 @@ void EdgeTrackingUtil::drawEdgeMatching(Mat& dst, const Mat& src, const vector<E
   }
 }
 
+void EdgeTrackingUtil::drawGradientLines(Mat& dst, const Mat& src, const std::vector<Point>& edges, const std::vector<double>& gdir)
+{
+  cvtColor(src, dst, CV_GRAY2RGB);
+  for(int i = 0; i < edges.size(); i++)
+  {
+    float gd = gdir[i];
+    Point p1(edges[i].x - 5*cos(gd), edges[i].y - 5*sin(gd));
+    Point p2(edges[i].x + 5*cos(gd), edges[i].y + 5*sin(gd));
+    line(dst, p1, p2, CV_RGB(255, 0, 0));
+  }
+}
+
 void EdgeTrackingUtil::drawGradientLines(Mat& dst, const Mat& src, const Mat& edges, const Mat& gdir)
 {
   cvtColor(src, dst, CV_GRAY2RGB);
@@ -85,31 +132,48 @@ void EdgeTrackingUtil::drawGradientLines(Mat& dst, const Mat& src, const Mat& ed
 
 std::vector<EdgeTrackingUtil::SamplePoint> EdgeTrackingUtil::getEdgeMatches(const Mat& vimg, const Mat& kf, const Eigen::Matrix3f vimgK, const Eigen::Matrix3f K, const Mat& vdepth, const Mat& kf_mask, const Eigen::Matrix4f& vimgTf)
 {
+  std::clock_t start;
   // Get edges from vimg and kf using canny
+  //start = std::clock();
   Mat kf_detected_edges, vimg_detected_edges, kf_detected_edges_temp;
   Canny(kf, kf_detected_edges_temp, canny_low_thresh, canny_high_thresh, 3);
   kf_detected_edges_temp.copyTo(kf_detected_edges, kf_mask);
     
   Canny(vimg, vimg_detected_edges, canny_low_thresh, canny_high_thresh, 3);
 
+  Mat vimg_edge_pts_mat, kf_edge_pts_mat;
+  findNonZero(vimg_detected_edges, vimg_edge_pts_mat);
+  findNonZero(kf_detected_edges, kf_edge_pts_mat);
+  std::vector<Point> vimg_edge_pts(vimg_edge_pts_mat.total());
+  std::vector<Point> kf_edge_pts(kf_edge_pts_mat.total());
+  for(int i = 0; i < vimg_edge_pts_mat.total(); i++)
+  {
+    vimg_edge_pts[i] = vimg_edge_pts_mat.at<Point>(i);
+  } 
+  //std::cout << "Canny time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC) << std::endl;
+
   //Get all edge points in vimg and gradients
-  Mat vimg_edge_dir, kf_edge_dir;
-  calcImageGradientDirection(vimg_edge_dir, vimg);
-  calcImageGradientDirection(kf_edge_dir, kf);
-  Mat edgePts;
-  findNonZero(vimg_detected_edges, edgePts);
+  start = std::clock();
+  Mat kf_edge_dir;
+  std::vector<double> vimg_edge_dirs = calcImageGradientDirection(vimg, vimg_edge_pts);
+  start = std::clock();
+  calcImageGradientDirection(kf_edge_dir, kf, kf_edge_pts);
+  //std::cout << "Edge grad time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC) << std::endl;
+
+  Eigen::Matrix3f vimgK_inv = vimgK.inverse();
 
   //Do 1D search along gradient direction to find closest edge in kf for each edge pt in vimg
-  int dmax = 20;
+  int dmax = 10;
   std::vector<EdgeTrackingUtil::SamplePoint> sps;
-  for(int i = 0; i < edgePts.total(); i++)
+  for(int i = 0; i < vimg_edge_pts.size(); i++)
   {
-    Point pt = edgePts.at<Point>(i);
+    Point pt = vimg_edge_pts[i];
     for(int d = 0; d < dmax; d++)
     {
-      float edge_dir = vimg_edge_dir.at<float>(pt.y,pt.x);
+      //float edge_dir = vimg_edge_dir.at<float>(pt.y,pt.x);
+      float edge_dir = vimg_edge_dirs[i];
       // camera intrinsics may not match virtual intrinsics, so we reproject the virtual point to the real camera frame
-      Eigen::Vector3f p_kf = K*vimgK.inverse()*Eigen::Vector3f(pt.x,pt.y,1); 
+      Eigen::Vector3f p_kf = K*vimgK_inv*Eigen::Vector3f(pt.x,pt.y,1); 
       p_kf /= p_kf(2);
       
       int x_idx = p_kf(0) + d*cos(edge_dir);
@@ -133,7 +197,7 @@ std::vector<EdgeTrackingUtil::SamplePoint> EdgeTrackingUtil::getEdgeMatches(cons
         sp.nuv = cvPoint2D32f(cos(edge_dir), sin(edge_dir));
 
         // Back project vimg point to 3D
-        Eigen::Vector3f p_cam = vimgK.inverse()*Eigen::Vector3f(pt.x,pt.y,1); 
+        Eigen::Vector3f p_cam = vimgK_inv*Eigen::Vector3f(pt.x,pt.y,1); 
         p_cam *= p_cam_depth/p_cam(2);
         Eigen::Vector4f p_world(p_cam(0), p_cam(1), p_cam(2), 1);
         p_world = vimgTf*p_world;
@@ -162,7 +226,7 @@ std::vector<EdgeTrackingUtil::SamplePoint> EdgeTrackingUtil::getEdgeMatches(cons
         sp.nuv = cvPoint2D32f(-cos(edge_dir), -sin(edge_dir));
         
         // Back project vimg point to 3D
-        Eigen::Vector3f p_cam = vimgK.inverse()*Eigen::Vector3f(pt.x,pt.y,1); 
+        Eigen::Vector3f p_cam = vimgK_inv*Eigen::Vector3f(pt.x,pt.y,1); 
         p_cam *= p_cam_depth/p_cam(2);
         Eigen::Vector4f p_world(p_cam(0), p_cam(1), p_cam(2), 1);
         p_world = vimgTf*p_world;
@@ -176,7 +240,7 @@ std::vector<EdgeTrackingUtil::SamplePoint> EdgeTrackingUtil::getEdgeMatches(cons
   if(show_debug)
   {
     Mat edge_dir_im;
-    drawGradientLines(edge_dir_im, vimg_detected_edges, vimg_detected_edges, vimg_edge_dir); 
+    drawGradientLines(edge_dir_im, vimg_detected_edges, vimg_edge_pts, vimg_edge_dirs); 
 
     Mat edge_matching_overlay;
     drawEdgeMatching(edge_matching_overlay, kf, sps);

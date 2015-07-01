@@ -109,6 +109,7 @@ private:
   double image_scale;
   double canny_high_thresh;
   double canny_low_thresh;
+  double pnp_match_radius;
 
   ros::NodeHandle nh;
   ros::NodeHandle nh_private;

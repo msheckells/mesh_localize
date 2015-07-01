@@ -95,6 +95,8 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     canny_low_thresh = 80;
   if(!nh_private.getParam("enable_edge_tracking", enable_edge_tracking))
     enable_edge_tracking = false;
+  if(!nh_private.getParam("pnp_match_radius", pnp_match_radius))
+    pnp_match_radius = -1;
   
   if(enable_edge_tracking)
   {
@@ -413,6 +415,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       Eigen::Matrix4f imgTf;
      
       if(!FindImageTfVirtualEdges(kf, ApplyMotionModel(dt), imgTf, true))
+      //if(!FindImageTfVirtualEdges(kf, currentPose, imgTf, true))
       {
         ResetMotionModel();
         localize_state = PNP;
@@ -1054,8 +1057,10 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
   Mat vimg_masked;
   vimg.copyTo(vimg_masked, mask);
 
+  start = ros::Time::now();
   std::vector<EdgeTrackingUtil::SamplePoint> sps = 
     EdgeTrackingUtil::getEdgeMatches(vimg_masked, kfc->GetImage(), vimgK, K_scaled, depth, kf_mask, vimgTf);
+  ROS_INFO("VirtualEdges: Edge matching time: %f", (ros::Time::now()-start).toSec());  
 
   double avgError = 0;
   for(int i = 0; i < sps.size(); i++)
@@ -1069,8 +1074,10 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
     return false;
   
   ROS_INFO("VirtualEdges: avg matching error: %f", avgError);
+  start = ros::Time::now();
   EdgeTrackingUtil::getEstimatedPoseIRLS(tf, vimgTf.inverse(), sps, K_scaled);
   tf = tf.inverse();
+  ROS_INFO("VirtualEdges: IRLS time: %f", (ros::Time::now()-start).toSec());  
 
   return true;
 }
@@ -1084,7 +1091,7 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
   // Get virtual image and depth map
   Mat depth, mask;
   Mat vimg;
-  Eigen::Matrix3f vimgK;
+  Eigen::Matrix3f vimgK, vimgK_inv;
   ros::Time start = ros::Time::now();
   if(virtual_image_source == "gazebo")
   {
@@ -1101,6 +1108,7 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
     ROS_ERROR("Invalid virtual_image_source");
     return false;
   }
+  vimgK_inv = vimgK.inverse();
   ROS_INFO("VirtualPnP: generate virtual img time: %f", (ros::Time::now()-start).toSec());
   
   if(mask_kf)
@@ -1211,21 +1219,58 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
     return false;
   }
 
-  // TODO: Add option to match all descriptors on GPU
-  if(vdesc_type == "surf_gpu")
+  if(pnp_match_radius > 0 && vdesc_type == "orb")
   {
-    gpu::BFMatcher_GPU matcher;
-    matcher.knnMatch(kfc->GetGPUDescriptors(), vdesc_gpu, matches, 2);  
-  }
-  else if(vdesc_type == "orb")
-  {
-    BFMatcher matcher(NORM_HAMMING);
-    matcher.knnMatch( kfc->GetDescriptors(), vdesc, matches, 2 );
+    std::vector<KeyPoint> kf_kps = kfc->GetKeypoints();
+    Mat kf_desc = kfc->GetDescriptors();
+    int step = kf_desc.step / sizeof(kf_desc.ptr()[0]);
+    for(int i = 0; i < vkps.size(); i++)
+    {
+      int best_match_idx = -1;
+      int best_match_dist = -1;
+      Eigen::Vector3f vkp_in_kf(vkps[i].pt.x, vkps[i].pt.y, 1);
+      vkp_in_kf = K_scaled*vimgK_inv*vkp_in_kf;
+      vkp_in_kf /= vkp_in_kf(2);
+      for(int j = 0; j < kf_kps.size(); j++)
+      {
+        if(sqrt(pow(vkp_in_kf(0)-kf_kps[j].pt.x,2) + pow(vkp_in_kf(1)-kf_kps[j].pt.y,2)) > pnp_match_radius)
+        {
+          continue;
+        }
+        int dist = cv::normHamming(vdesc.ptr(i), kf_desc.ptr() + step*j, kf_desc.cols);
+        if(dist < best_match_dist || best_match_dist == -1)
+        {
+          best_match_dist = dist;
+          best_match_idx = j;
+        }
+      }
+      if(best_match_idx != -1)
+      {
+        std::vector<DMatch> pmatches(2);
+        pmatches[0] = DMatch(best_match_idx, i, best_match_dist);
+        pmatches[1] = DMatch(best_match_idx, i, std::numeric_limits<float>::max());
+        matches.push_back(pmatches);
+      }
+    }
   }
   else
   {
-    FlannBasedMatcher matcher;
-    matcher.knnMatch( kfc->GetDescriptors(), vdesc, matches, 2 );
+    // TODO: Add option to match all descriptors on GPU
+    if(vdesc_type == "surf_gpu")
+    {
+      gpu::BFMatcher_GPU matcher;
+      matcher.knnMatch(kfc->GetGPUDescriptors(), vdesc_gpu, matches, 2);  
+    }
+    else if(vdesc_type == "orb")
+    {
+      BFMatcher matcher(NORM_HAMMING);
+      matcher.knnMatch( kfc->GetDescriptors(), vdesc, matches, 2 );
+    }
+    else
+    {
+      FlannBasedMatcher matcher;
+      matcher.knnMatch( kfc->GetDescriptors(), vdesc, matches, 2 );
+    }
   }
 
   ROS_INFO("VirtualPnP: find keypoints/matches time: %f", (ros::Time::now()-start).toSec());

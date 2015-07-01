@@ -36,9 +36,13 @@ public:
   static std::vector<SamplePoint> getEdgeMatches(const cv::Mat& vimg, const cv::Mat& kf, 
     const Eigen::Matrix3f vimgK, const Eigen::Matrix3f K, const cv::Mat& vdepth, 
     const cv::Mat& kf_mask, const Eigen::Matrix4f& vimgTf);
+  static std::vector<double> calcImageGradientDirection(const cv::Mat& src, const std::vector<cv::Point>& pts);
   static void calcImageGradientDirection(cv::Mat& dst, const cv::Mat& src);
+  static void calcImageGradientDirection(cv::Mat& dst, const cv::Mat& src, const std::vector<cv::Point>& pts);
   static void drawGradientLines(cv::Mat& dst, const cv::Mat& src, const cv::Mat& edges, 
     const cv::Mat& gdir);
+  static void drawGradientLines(cv::Mat& dst, const cv::Mat& src, const std::vector<cv::Point>& edges,
+    const std::vector<double>& gdir);
   static void drawEdgeMatching(cv::Mat& dst, const cv::Mat& src, const std::vector<SamplePoint>& sps);
   static bool withinOri(float o1, float o2, float oth);
 
