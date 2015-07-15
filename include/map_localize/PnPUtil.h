@@ -11,7 +11,11 @@
 class PnPUtil
 {
 public:
-  static std::vector<cv::Point3f> BackprojectPts(const std::vector<cv::Point2f>& pts, const Eigen::Matrix4f& camTf, const Eigen::Matrix3f& K, const cv::Mat& depth);
-  static bool RansacPnP(const std::vector<cv::Point3f>& matchPts3d, const std::vector<cv::Point2f>& matchPts, cv::Mat Kcv, Eigen::Matrix4f tfguess, Eigen::Matrix4f& tf, std::vector<int>& inlierIdx, double* avgReprojError = NULL);
+  static std::vector<cv::Point3f> BackprojectPts(const std::vector<cv::Point2f>& pts, 
+    const Eigen::Matrix4f& camTf, const Eigen::Matrix3f& K, const cv::Mat& depth);
+  static bool RansacPnP(const std::vector<cv::Point3f>& matchPts3d, 
+    const std::vector<cv::Point2f>& matchPts, cv::Mat Kcv, Eigen::Matrix4f tfguess, 
+    Eigen::Matrix4f& tf, std::vector<int>& inlierIdx, double* avgReprojError = NULL, 
+    Eigen::Matrix<float, 6, 6>* cov = NULL);
 };
 #endif

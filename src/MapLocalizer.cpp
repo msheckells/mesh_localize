@@ -40,12 +40,14 @@
 #include <pcl/filters/extract_indices.h>
 #include <pcl/io/pcd_io.h>
 
+#include <gcop/so3.h>
+
 //#include <kvld/kvld.h>
 
-#define SHOW_MATCHES_ 
-
 MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
+    init_undistort(true),
     get_frame(true),
+    spinning(false),
     get_virtual_image(false),
     get_virtual_depth(false),
     numPnpRetrys(0),
@@ -89,20 +91,37 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     global_localization_alg = "feature_match";
   if(!nh_private.getParam("image_scale", image_scale))
     image_scale = 1.0;
+  if(!nh_private.getParam("canny_sigma", canny_sigma))
+    canny_sigma = 0.33;
   if(!nh_private.getParam("canny_high_thresh", canny_high_thresh))
     canny_high_thresh = 200;
   if(!nh_private.getParam("canny_low_thresh", canny_low_thresh))
     canny_low_thresh = 80;
+  if(!nh_private.getParam("edge_tracking_dmax", edge_tracking_dmax))
+    edge_tracking_dmax = 15;
+  if(!nh_private.getParam("autotune_canny", autotune_canny))
+    autotune_canny = false;
   if(!nh_private.getParam("enable_edge_tracking", enable_edge_tracking))
     enable_edge_tracking = false;
+  if(!nh_private.getParam("edge_tracking_iterations", edge_tracking_iterations))
+    edge_tracking_iterations = 1;
   if(!nh_private.getParam("pnp_match_radius", pnp_match_radius))
     pnp_match_radius = -1;
+  if(!nh_private.getParam("motion_model", motion_model))
+    motion_model = "CONSTANT";
+  if(!nh_private.getParam("do_undistort", do_undistort))
+    do_undistort = true;
+  if(!nh_private.getParam("pixel_noise", pixel_noise))
+    pixel_noise = 3;
   
   if(enable_edge_tracking)
   {
     EdgeTrackingUtil::show_debug = show_debug;
     EdgeTrackingUtil::canny_high_thresh = canny_high_thresh;
     EdgeTrackingUtil::canny_low_thresh = canny_low_thresh;
+    EdgeTrackingUtil::canny_sigma = canny_sigma;
+    EdgeTrackingUtil::autotune_canny = autotune_canny;
+    EdgeTrackingUtil::dmax = edge_tracking_dmax;
   }
 
   //TODO: read from param file.  Hard-coded, based on DSLR
@@ -245,6 +264,20 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     return;
   }
 
+  if(motion_model == "IMU")
+  {
+    imu_mm = new IMUMotionModel();
+    ROS_INFO("Calibrating gyros...");
+    while(!imu_mm->isCalibrated())
+    {
+    }
+    ROS_INFO("Done calibrating gyros...");
+  }
+  else
+  {
+    imu_mm = NULL;
+  }
+
   if(show_pnp_matches)
   { 
     namedWindow( "PnP Matches", WINDOW_NORMAL );
@@ -255,11 +288,13 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   localize_state = INIT;
 
   spin_time = ros::Time::now();
-  timer = nh_private.createTimer(ros::Duration(0.01), &MapLocalizer::spin, this);
+  timer = nh_private.createTimer(ros::Duration(0.001), &MapLocalizer::spin, this);
 }
 
 MapLocalizer::~MapLocalizer()
 {
+  if(imu_mm)
+    delete imu_mm;
 }
 
 void MapLocalizer::HandleImage(const sensor_msgs::ImageConstPtr& msg)
@@ -283,8 +318,22 @@ void MapLocalizer::HandleImage(const sensor_msgs::ImageConstPtr& msg)
     {
       resize(image, image, Size(0,0), image_scale, image_scale);
     }
-    undistort(image, current_image, Kcv, distcoeffcv);
-    ROS_INFO("Image copy time: %f", (ros::Time::now()-start).toSec());  
+    if(do_undistort)
+    {
+      if(init_undistort)
+      {
+        initUndistortRectifyMap(Kcv, distcoeffcv, Mat::eye(3, 3, CV_64F), Kcv, 
+          Size(image.cols, image.rows), CV_32FC1, undistort_map1, undistort_map2);
+        init_undistort = false;
+      }
+      remap(image, current_image, undistort_map1, undistort_map2, INTER_LINEAR);
+      //undistort(image, current_image, Kcv, distcoeffcv);
+    }
+    else
+    {
+      current_image = image;
+    }
+    ROS_INFO("Image process time: %f", (ros::Time::now()-start).toSec());  
     get_frame = false;
   }
 }
@@ -378,22 +427,54 @@ void MapLocalizer::PublishPose(Eigen::Matrix4f tf)
 }
 
 // decaying velocity model
-void MapLocalizer::UpdateMotionModel(const Eigen::Matrix4f& oldTf, const Eigen::Matrix4f& newTf, double dt)
+void MapLocalizer::UpdateMotionModel(const Eigen::Matrix4f& oldTf, const Eigen::Matrix4f& newTf,
+  const Eigen::Matrix<float, 6, 6>& cov, double dt)
 {
-  Eigen::Matrix4f new_from_old = newTf*oldTf.inverse();
-  Eigen::Matrix4f cam_motion = new_from_old.log()/dt;
-  Eigen::Matrix4f old_cam_vel = camera_velocity;
-  camera_velocity = 0.9 * (0.5 * cam_motion + 0.5 * old_cam_vel);
+  if(motion_model == "CONSTANT")
+  {
+    Eigen::Matrix4f new_from_old = newTf*oldTf.inverse();
+    Eigen::Matrix4f cam_motion = new_from_old.log()/dt;
+    Eigen::Matrix4f old_cam_vel = camera_velocity;
+    camera_velocity = 0.9 * (0.5 * cam_motion + 0.5 * old_cam_vel);
+  }
+  else if(motion_model == "IMU")
+  {
+    // Apply correction measurement.  
+    imu_mm->correct(newTf, cov);
+  }
+  else
+  {
+    camera_velocity = Eigen::MatrixXf::Zero(4,4);
+  }
 }
 
 Eigen::Matrix4f MapLocalizer::ApplyMotionModel(double dt)
 {
-  return (dt*camera_velocity).exp()*currentPose;
+  if(motion_model == "IMU")
+  {
+    // Apply all IMU measurements since last ApplyMotionModel call
+    return imu_mm->predict();
+  }
+  else if(motion_model == "CONSTANT")
+  {
+    return (dt*camera_velocity).exp()*currentPose;
+  }
+  else
+  {
+    return currentPose;
+  }
 }
 
 void MapLocalizer::ResetMotionModel()
 {
-  camera_velocity = Eigen::MatrixXf::Zero(4,4);
+  if(motion_model == "CONSTANT")
+  {
+    camera_velocity = Eigen::MatrixXf::Zero(4,4);
+  }
+  else if(motion_model == "IMU")
+  {
+    imu_mm->reset();
+  }
 }
 
 void MapLocalizer::spin(const ros::TimerEvent& e)
@@ -401,8 +482,9 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
   PublishMap();
 
   ros::Time start;
-  if(!get_frame && !get_virtual_image && !get_virtual_depth)
+  if(!spinning && !get_frame && !get_virtual_image && !get_virtual_depth)
   {
+    spinning = true;
     ros::Time current_time = ros::Time::now();
     double dt = (current_time - last_spin_time).toSec();
     last_spin_time = current_time;
@@ -413,19 +495,27 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       ROS_INFO("Performing local Edge search...");
       start = ros::Time::now();
       Eigen::Matrix4f imgTf;
-     
       if(!FindImageTfVirtualEdges(kf, ApplyMotionModel(dt), imgTf, true))
       //if(!FindImageTfVirtualEdges(kf, currentPose, imgTf, true))
       {
         ResetMotionModel();
         localize_state = PNP;
         delete kf;
+        spinning = false;
         return;
       }
-      UpdateMotionModel(currentPose, imgTf, dt);
-
-
       ROS_INFO("FindImageTfVirtualEdges time: %f", (ros::Time::now()-start).toSec());  
+      
+      for(int i = 0; i < edge_tracking_iterations-1; i++)
+      {
+        Eigen::Matrix4f prevTf = imgTf;
+        FindImageTfVirtualEdges(kf, prevTf, imgTf, true);
+      }
+      
+      Eigen::Matrix<float, 6, 6> cov;
+      UpdateMotionModel(currentPose, imgTf, cov, dt);
+
+
       currentPose = imgTf;
       UpdateVirtualSensorState(currentPose);
       PublishPose(currentPose);
@@ -447,7 +537,11 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       
 
       ros::Time start = ros::Time::now();
-      if(!FindImageTfVirtualPnp(kf, ApplyMotionModel(dt), imgTf, pnp_descriptor_type, true))
+      Eigen::Matrix<float, 6 ,6> cov;
+      Eigen::Matrix4f currentPoseMM = ApplyMotionModel(dt);
+      //std::cout << "currentPoseMM = " << std::endl << currentPoseMM << std::endl;
+      //std::cout << "currentPose = " << std::endl << currentPose << std::endl;
+      if(!FindImageTfVirtualPnp(kf, currentPoseMM, imgTf, pnp_descriptor_type, true, cov))
       {
         ResetMotionModel();
         numPnpRetrys++;
@@ -457,13 +551,14 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
           numPnpRetrys = 0;
           localize_state = LOCAL_INIT;
         }
+        spinning = false;
         delete kf;
         return;
       }
-      UpdateMotionModel(currentPose, imgTf, dt);
+      UpdateMotionModel(currentPose, imgTf, cov, dt);
       numPnpRetrys = 0;
       ROS_INFO("FindImageTfVirtualPnp time: %f", (ros::Time::now()-start).toSec());  
-      if(enable_edge_tracking && pnpReprojError < 1.0)
+      if(enable_edge_tracking && pnpReprojError < 1.5)
       {
         localize_state = EDGES;
       }
@@ -487,13 +582,21 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       ROS_INFO("Descriptor extraction time: %f", (ros::Time::now()-start).toSec());  
 
       ros::Time start = ros::Time::now();
-      if(!FindImageTfVirtualPnp(kf, currentPose, imgTf, img_match_descriptor_type, false))
+      Eigen::Matrix<float, 6 ,6> cov;
+      if(!FindImageTfVirtualPnp(kf, currentPose, imgTf, img_match_descriptor_type, false, cov))
       {
-        ROS_INFO("PnP failed, reinitializing using last known pose");
+        ROS_INFO("PnP init failed, reinitializing using last known pose");
         localize_state = LOCAL_INIT;
         
+        spinning = false;
         delete kf;
         return;
+      }
+
+      ResetMotionModel();
+      if(motion_model == "IMU")
+      { 
+        imu_mm->init(imgTf, cov);
       }
 
       numPnpRetrys = 0;
@@ -542,6 +645,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
           ROS_INFO("Fully reinitializing");
           localize_state = INIT;
         }
+        spinning = false;
       }
 
       ROS_INFO("LocalizationInit time: %f", (ros::Time::now()-start).toSec());  
@@ -550,6 +654,7 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
     ROS_INFO("Spin time: %f", (ros::Time::now() - spin_time).toSec());
     spin_time = ros::Time::now();
 
+    spinning = false;
     get_frame = true;
   }
 }
@@ -976,22 +1081,28 @@ std::vector<Point3d> MapLocalizer::PCLToPoint3d(const std::vector<pcl::PointXYZ>
   return points;
 }
 
-void MapLocalizer::ReprojectMask(Mat& dst, const Mat& src, const Eigen::Matrix3f& dstK, const Eigen::Matrix3f& srcK, const Mat& src_depth)
+void MapLocalizer::ReprojectMask(Mat& dst, const Mat& src, const Eigen::Matrix3f& dstK, 
+  const Eigen::Matrix3f& srcK)
 {
+  double fxs = srcK(0,0);
+  double fys = srcK(1,1);
+  double cxs = srcK(0,2);
+  double cys = srcK(1,2);
+  double fxd = dstK(0,0);
+  double fyd = dstK(1,1);
+  double cxd = dstK(0,2);
+  double cyd = dstK(1,2);
   for(int i = 0; i < src.rows; i++)
   {
     for(int j = 0; j < src.cols; j++)
     {
       if(src.at<uchar>(i,j) != 255)
         continue;
-      Eigen::Vector3f src_pt(j, i, 1);
-      src_pt = srcK.inverse()*src_pt;
-      src_pt = (src_depth.at<float>(i,j)/src_pt(2))*src_pt;
+      double px_un = (j - cxs)/fxs;
+      double py_un = (i - cys)/fys;
 
-      Eigen::Vector3f dst_pt = dstK*src_pt;
-      dst_pt = dst_pt/dst_pt(2);
-      int dst_x = floor(dst_pt(0));
-      int dst_y = floor(dst_pt(1));
+      int dst_x = floor(px_un*fxd + cxd);
+      int dst_y = floor(py_un*fyd + cyd);
       if(dst_x < 0 || dst_x >= dst.cols || dst_y < 0 || dst_y >= dst.rows)
         continue;
       
@@ -1010,7 +1121,7 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
 
   // Get virtual image and depth map
   Mat depth, mask;
-  Mat vimg;
+  Mat vimg, vimg_masked;
   Eigen::Matrix3f vimgK;
   ros::Time start = ros::Time::now();
   if(virtual_image_source == "gazebo")
@@ -1028,13 +1139,15 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
     ROS_ERROR("Invalid virtual_image_source");
     return false;
   }
+  vimg.copyTo(vimg_masked, mask);
   ROS_INFO("VirtualEdges: generate virtual img time: %f", (ros::Time::now()-start).toSec());
   
   Mat kf_mask;
   if(mask_kf)
   {
+    start = ros::Time::now();
     Mat reproj_mask = Mat(kfc->GetImage().rows, kfc->GetImage().cols, CV_8U, Scalar(0));
-    ReprojectMask(reproj_mask, mask, K_scaled, vimgK, depth);
+    ReprojectMask(reproj_mask, mask, K_scaled, vimgK);
 
     //dilate mask so as not to mask good features that may have moved
     int dilate_size = 15;
@@ -1042,7 +1155,7 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
     dilate(reproj_mask, kf_mask, element);
     kfc->SetMask(kf_mask);
     
-    
+    ROS_INFO("VirtualEdges: Reproject mask time: %f", (ros::Time::now()-start).toSec());  
     //namedWindow( "Reproj Mask", WINDOW_NORMAL );// Create a window for display.
     //imshow( "Reproj Mask", reproj_mask ); 
     if(show_debug)
@@ -1054,8 +1167,6 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
     }
   }
   
-  Mat vimg_masked;
-  vimg.copyTo(vimg_masked, mask);
 
   start = ros::Time::now();
   std::vector<EdgeTrackingUtil::SamplePoint> sps = 
@@ -1075,6 +1186,7 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
   
   ROS_INFO("VirtualEdges: avg matching error: %f", avgError);
   start = ros::Time::now();
+  //EdgeTrackingUtil::getEstimatedPosePnP(tf, vimgTf.inverse(), sps, Kcv);
   EdgeTrackingUtil::getEstimatedPoseIRLS(tf, vimgTf.inverse(), sps, K_scaled);
   tf = tf.inverse();
   ROS_INFO("VirtualEdges: IRLS time: %f", (ros::Time::now()-start).toSec());  
@@ -1084,7 +1196,7 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
 
 
 
-bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f vimgTf, Eigen::Matrix4f& tf, std::string vdesc_type, bool mask_kf)
+bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f vimgTf, Eigen::Matrix4f& tf, std::string vdesc_type, bool mask_kf, Eigen::Matrix<float, 6, 6>& cov)
 {
   tf = Eigen::MatrixXf::Identity(4,4);
 
@@ -1115,7 +1227,7 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
   {
     Mat reproj_mask = Mat(kfc->GetImage().rows, kfc->GetImage().cols, CV_8U, Scalar(0));
     start = ros::Time::now();
-    ReprojectMask(reproj_mask, mask, K_scaled, vimgK, depth);
+    ReprojectMask(reproj_mask, mask, K_scaled, vimgK);
     int dilate_size = 15;
     Mat element = getStructuringElement(MORPH_RECT, Size(2*dilate_size+1,2*dilate_size+1), Point(dilate_size,dilate_size));
     dilate(reproj_mask, reproj_mask, element);
@@ -1345,10 +1457,22 @@ bool MapLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f
   //solvePnPRansac(matchPts3d, matchPts, Kcv, 
   std::vector<int> inlierIdx;
   start = ros::Time::now();
-  if(!PnPUtil::RansacPnP(matchPts3d, matchPts, Kcv, vimgTf.inverse(), tfran, inlierIdx, &pnpReprojError))
+  if(!PnPUtil::RansacPnP(matchPts3d, matchPts, Kcv, vimgTf.inverse(), tfran, inlierIdx, &pnpReprojError, &cov))
   {
     return false;
   }
+ 
+  // compute covariance of inverse transform from transform;
+  Eigen::Matrix<float, 6, 6> J;
+  J.setZero();
+  J.block<3,3>(0,0) = -Eigen::MatrixXf::Identity(3,3);
+  J.block<3,3>(3,3) = -tfran.block<3,3>(0,0).transpose();
+  Eigen::Matrix3d A;
+  gcop::SO3::Instance().hat(A, (-tfran.block<3,3>(0,0).transpose()*tfran.block<3,1>(0,3)).cast<double>()); // hat(-R^Tt)
+  J.block<3,3>(3,0) = A.cast<float>();
+
+  cov = J*pixel_noise*cov*J.transpose();
+  //std::cout << "R, t inv covariance:" << std::endl << cov << std::endl;
 
   if(show_pnp_matches)
   { 

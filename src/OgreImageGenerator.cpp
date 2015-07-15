@@ -32,8 +32,11 @@ Mat OgreImageGenerator::GenerateVirtualImage(const Eigen::Matrix4f& pose, cv::Ma
 
   Eigen::Quaternionf q(pose.block<3,3>(0,0));
   Mat im;
-  vih->getVirtualImageAndDepth(im, depth, x, y, z, q.w(), q.x(), q.y(), q.z());
-  //medianBlur(depth, depth, 5);
+  vih->getVirtualImageAndDepthInternal(im, depth, x, y, z, q.w(), q.x(), q.y(), q.z());
+  // dilate the depth a bit so the outline edges aren't masked out
+  int dilate_size = 1;
+  Mat element = getStructuringElement(MORPH_RECT, Size(2*dilate_size+1,2*dilate_size+1), Point(dilate_size,dilate_size));
+  dilate(depth, depth, element);
   //medianBlur(depth, depth, 5);
   mask = Mat(app->getWindowHeight(), app->getWindowWidth(), CV_8U, Scalar(255));
 

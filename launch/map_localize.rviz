@@ -62,11 +62,13 @@ Visualization Manager:
         camera_pose:
           Value: false
         map_localize:
+          Value: false
+        map_localizer/imu:
           Value: true
         markers:
           Value: false
         object_pose:
-          Value: true
+          Value: false
         world:
           Value: false
       Marker Scale: 1
@@ -79,6 +81,8 @@ Visualization Manager:
           world:
             camera_pose:
               {}
+            map_localizer/imu:
+              {}
             markers:
               {}
             object_pose:
@@ -86,13 +90,13 @@ Visualization Manager:
       Update Interval: 0
       Value: true
     - Class: rviz/Marker
-      Enabled: true
+      Enabled: false
       Marker Topic: /map_localize/map
       Name: Map
       Namespaces:
-        map_localize: true
+        {}
       Queue Size: 0
-      Value: true
+      Value: false
     - Class: rviz/Marker
       Enabled: false
       Marker Topic: /map_localize/estimated_position
@@ -141,7 +145,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 6.06648
+      Distance: 5.95279
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
@@ -153,10 +157,10 @@ Visualization Manager:
         Z: -0.577302
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.860203
+      Pitch: 0.375203
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 5.20531
+      Yaw: 6.20032
     Saved: ~
 Window Geometry:
   Displays:
@@ -174,5 +178,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1855
-  X: 55
-  Y: -14
+  X: 65
+  Y: 24

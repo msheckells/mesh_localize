@@ -1,4 +1,5 @@
 #include "map_localize/EdgeTrackingUtil.h"
+#include "map_localize/PnPUtil.h"
 #include "TooN/TooN.h"
 #include "TooN/SVD.h"       // for SVD
 #include "TooN/so3.h"       // for special orthogonal group
@@ -6,14 +7,18 @@
 #include "TooN/wls.h"       // for weighted least square
 #include <opencv2/highgui/highgui.hpp>
 #include <ctime>
+#include <boost/thread.hpp>
 
 
 using namespace TooN;
 using namespace cv;
   
 bool EdgeTrackingUtil::show_debug = false;
+bool EdgeTrackingUtil::autotune_canny = true;
 double EdgeTrackingUtil::canny_high_thresh = 180;
 double EdgeTrackingUtil::canny_low_thresh = 60;
+double EdgeTrackingUtil::dmax = 15;
+double EdgeTrackingUtil::canny_sigma = .33;
 
 bool EdgeTrackingUtil::withinOri(float o1, float o2, float oth)
 {
@@ -130,62 +135,210 @@ void EdgeTrackingUtil::drawGradientLines(Mat& dst, const Mat& src, const Mat& ed
   }
 }
 
-std::vector<EdgeTrackingUtil::SamplePoint> EdgeTrackingUtil::getEdgeMatches(const Mat& vimg, const Mat& kf, const Eigen::Matrix3f vimgK, const Eigen::Matrix3f K, const Mat& vdepth, const Mat& kf_mask, const Eigen::Matrix4f& vimgTf)
+bool EdgeTrackingUtil::extractEdgeDescriptor(std::vector<double>& desc, const Mat& im, Point pt,
+  double edge_dir, unsigned int window_size)
 {
-  std::clock_t start;
-  // Get edges from vimg and kf using canny
-  //start = std::clock();
-  Mat kf_detected_edges, vimg_detected_edges, kf_detected_edges_temp;
-  Canny(kf, kf_detected_edges_temp, canny_low_thresh, canny_high_thresh, 3);
-  kf_detected_edges_temp.copyTo(kf_detected_edges, kf_mask);
-    
-  Canny(vimg, vimg_detected_edges, canny_low_thresh, canny_high_thresh, 3);
-
-  Mat vimg_edge_pts_mat, kf_edge_pts_mat;
-  findNonZero(vimg_detected_edges, vimg_edge_pts_mat);
-  findNonZero(kf_detected_edges, kf_edge_pts_mat);
-  std::vector<Point> vimg_edge_pts(vimg_edge_pts_mat.total());
-  std::vector<Point> kf_edge_pts(kf_edge_pts_mat.total());
-  for(int i = 0; i < vimg_edge_pts_mat.total(); i++)
+  double dx = cos(edge_dir);
+  double dy = sin(edge_dir);
+  desc.resize(2*window_size+1);
+  double norm = 0;
+  for(int i = 0; i < window_size+1; i++)
   {
-    vimg_edge_pts[i] = vimg_edge_pts_mat.at<Point>(i);
+    int x1 = round(pt.x + i*dx); 
+    int y1 = round(pt.y + i*dy);
+    if(x1 < 0 || x1 >= im.cols || y1 < 0 || y1 >= im.rows)
+      return false;
+
+    desc.at(window_size + i) = im.at<uchar>(y1,x1);
+    norm += pow(im.at<uchar>(y1,x1),2);
+    if( i > 0)
+    {
+      int x2 = round(pt.x - i*dx); 
+      int y2 = round(pt.y - i*dy);
+      if(x2 < 0 || x2 >= im.cols || y2 < 0 || y2 >= im.rows)
+        return false;
+       
+      desc.at(window_size - i) = im.at<uchar>(y2,x2);
+      norm += pow(im.at<uchar>(y2,x2),2);
+    } 
   } 
-  //std::cout << "Canny time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC) << std::endl;
+  norm = sqrt(norm);
+  for(int i = 0; i < desc.size(); i++)
+  {
+    desc[i] /= norm;
+  }
+  return true;
+}
 
-  //Get all edge points in vimg and gradients
-  start = std::clock();
-  Mat kf_edge_dir;
-  std::vector<double> vimg_edge_dirs = calcImageGradientDirection(vimg, vimg_edge_pts);
-  start = std::clock();
-  calcImageGradientDirection(kf_edge_dir, kf, kf_edge_pts);
-  //std::cout << "Edge grad time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC) << std::endl;
+double EdgeTrackingUtil::getMedian(const Mat& image, int start_bin)
+{
+  double m;//=(image.rows*image.cols)/2;
+  int bin0=0;
+  double med = -1;
+  int histSize = 256;
+  float range[] = { 0, 256 } ;
+  const float* histRange = { range };
+  bool uniform = true;
+  bool accumulate = false;
+  cv::Mat hist0;
+  cv::calcHist(&image, 1, 0, cv::Mat(), hist0, 1, &histSize, &histRange, uniform, accumulate );
 
+  m = 0;
+  for (int i = start_bin; i < 256; i++)
+  {
+    m+=cvRound(hist0.at<float>(i));
+  }
+  m/=2;
+  for (int i=start_bin; i<256 &&  med<0 ;i++)
+  {
+    bin0=bin0+cvRound(hist0.at<float>(i));
+    if (bin0>m && med<0)
+      med=i;
+  }
+
+  return med;
+}
+
+double EdgeTrackingUtil::l2Norm(std::vector<double>& d1, std::vector<double> d2)
+{
+  assert(d1.size() == d2.size());
+  double dist = 0;
+  for(int i = 0; i < d1.size(); i++)
+  {
+    dist += (d1[i]-d2[i])*(d1[i]-d2[i]);
+  }
+  return sqrt(dist);
+}
+
+std::vector<EdgeTrackingUtil::SamplePoint> EdgeTrackingUtil::getWindowedEdgeMatches(
+  const Mat& vimg,
+  const std::vector<Point>& vimg_edge_pts, const std::vector<double>& vimg_edge_dirs, 
+  const Mat& kf,
+  const Mat& kf_detected_edges, const Mat& kf_edge_dir, const Eigen::Matrix3f vimgK, 
+  const Eigen::Matrix3f K, const Mat& vdepth, const Eigen::Matrix4f& vimgTf)
+{
+  double dmax = 100;//sqrt(kf.cols*kf.cols + kf.rows*kf.rows);
+  int window_size = 3;
   Eigen::Matrix3f vimgK_inv = vimgK.inverse();
 
   //Do 1D search along gradient direction to find closest edge in kf for each edge pt in vimg
-  int dmax = 10;
   std::vector<EdgeTrackingUtil::SamplePoint> sps;
   for(int i = 0; i < vimg_edge_pts.size(); i++)
   {
     Point pt = vimg_edge_pts[i];
+    double p_cam_depth = vdepth.at<float>(int(pt.y), int(pt.x));
+    if(p_cam_depth == 0 || p_cam_depth == -1)
+      continue;
+
+    float edge_dir = vimg_edge_dirs[i];
+    // camera intrinsics may not match virtual intrinsics, so we reproject the virtual point to 
+    // the real camera frame
+    Eigen::Vector3f p_kf = K*vimgK_inv*Eigen::Vector3f(pt.x,pt.y,1); 
+    std::vector<double> vimg_desc;
+    
+    if(!extractEdgeDescriptor(vimg_desc, vimg, pt, edge_dir, window_size))
+      continue;
+
+    Point best_match_pt;
+    double best_match_norm = -1;
     for(int d = 0; d < dmax; d++)
     {
-      //float edge_dir = vimg_edge_dir.at<float>(pt.y,pt.x);
-      float edge_dir = vimg_edge_dirs[i];
-      // camera intrinsics may not match virtual intrinsics, so we reproject the virtual point to the real camera frame
-      Eigen::Vector3f p_kf = K*vimgK_inv*Eigen::Vector3f(pt.x,pt.y,1); 
-      p_kf /= p_kf(2);
-      
       int x_idx = p_kf(0) + d*cos(edge_dir);
       int y_idx = p_kf(1) + d*sin(edge_dir);
       if(x_idx < 0 || x_idx >= kf_detected_edges.cols || y_idx < 0 || y_idx >= kf_detected_edges.rows)
         continue;
       
-      if(kf_detected_edges.at<uchar>(y_idx, x_idx) == 255 && withinOri(edge_dir*180./M_PI, kf_edge_dir.at<float>(y_idx, x_idx)*180./M_PI, 15))
+      if(kf_detected_edges.at<uchar>(y_idx, x_idx) == 255 && 
+        withinOri(edge_dir*180./M_PI, kf_edge_dir.at<float>(y_idx, x_idx)*180./M_PI, 20))
       {
-        double p_cam_depth = vdepth.at<float>(int(pt.y), int(pt.x));
-        if(p_cam_depth == 0 || p_cam_depth == -1)
+        std::vector<double> kf_desc;
+        if(!extractEdgeDescriptor(kf_desc, kf, Point(x_idx, y_idx), 
+          kf_edge_dir.at<float>(y_idx, x_idx), window_size))
+        {
           continue;
+        }
+        double norm = l2Norm(kf_desc, vimg_desc);
+        if(norm < best_match_norm || best_match_norm == -1)
+        {
+          best_match_norm = norm;
+          best_match_pt = Point(x_idx, y_idx);
+        }
+      }
+      //check other direction
+      x_idx = p_kf(0) - d*cos(edge_dir);
+      y_idx = p_kf(1) - d*sin(edge_dir);
+      if(x_idx < 0 || x_idx >= kf_detected_edges.cols || y_idx < 0 || y_idx >= kf_detected_edges.rows)
+        continue;
+      if(kf_detected_edges.at<uchar>(y_idx, x_idx) == 255 && 
+        withinOri(edge_dir*180./M_PI, kf_edge_dir.at<float>(y_idx, x_idx)*180./M_PI, 20))
+      {
+        std::vector<double> kf_desc;
+        if(!extractEdgeDescriptor(kf_desc, kf, Point(x_idx, y_idx), 
+          kf_edge_dir.at<float>(y_idx, x_idx), window_size))
+        {
+          continue;
+        }
+        double norm = l2Norm(kf_desc, vimg_desc);
+        if(norm < best_match_norm || best_match_norm == -1)
+        {
+          best_match_norm = norm;
+          best_match_pt = Point(x_idx, y_idx);
+        }
+      } 
+    }
+    if(best_match_norm > 0 && best_match_norm < sqrt(2*window_size+1)*50)
+    {
+      // Found correspondence
+      // Store vimg and KF 2D correspondences
+      EdgeTrackingUtil::SamplePoint sp; 
+      sp.coord2 = cvPoint2D32f(p_kf(0), p_kf(1)); 
+      sp.edge_pt2 = best_match_pt; 
+      sp.dist = sqrt(pow(p_kf(0) - best_match_pt.x,2)+pow(p_kf(1) - best_match_pt.y,2));
+      sp.dx = -cos(edge_dir);
+      sp.dy = -sin(edge_dir);
+      sp.nuv = cvPoint2D32f(-cos(edge_dir), -sin(edge_dir));
+        
+      // Back project vimg point to 3D
+      Eigen::Vector3f p_cam = vimgK_inv*Eigen::Vector3f(pt.x,pt.y,1); 
+      p_cam *= p_cam_depth/p_cam(2);
+      Eigen::Vector4f p_world(p_cam(0), p_cam(1), p_cam(2), 1);
+      p_world = vimgTf*p_world;
+      sp.coord3 = cvPoint3D32f(p_world(0), p_world(1), p_world(2));    
+      sps.push_back(sp);
+    }
+  }
+  return sps;
+}
+
+std::vector<EdgeTrackingUtil::SamplePoint> EdgeTrackingUtil::getEdgeMatches(
+  const std::vector<Point>& vimg_edge_pts, const std::vector<double>& vimg_edge_dirs, 
+  const Mat& kf_detected_edges, const Mat& kf_edge_dir, const Eigen::Matrix3f vimgK, 
+  const Eigen::Matrix3f K, const Mat& vdepth, const Eigen::Matrix4f& vimgTf)
+{
+  Eigen::Matrix3f vimgK_inv = vimgK.inverse();
+
+  //Do 1D search along gradient direction to find closest edge in kf for each edge pt in vimg
+  std::vector<EdgeTrackingUtil::SamplePoint> sps;
+  for(int i = 0; i < vimg_edge_pts.size(); i++)
+  {
+    Point pt = vimg_edge_pts[i];
+    double p_cam_depth = vdepth.at<float>(int(pt.y), int(pt.x));
+    if(p_cam_depth == 0 || p_cam_depth == -1)
+      continue;
+    
+    float edge_dir = vimg_edge_dirs[i];
+    // camera intrinsics may not match virtual intrinsics, so we reproject the virtual point to 
+    // the real camera frame
+    Eigen::Vector3f p_kf = K*vimgK_inv*Eigen::Vector3f(pt.x,pt.y,1); 
+    for(int d = 0; d < dmax; d++)
+    {
+      int x_idx = p_kf(0) + d*cos(edge_dir);
+      int y_idx = p_kf(1) + d*sin(edge_dir);
+      if(x_idx < 0 || x_idx >= kf_detected_edges.cols || y_idx < 0 || y_idx >= kf_detected_edges.rows)
+        continue;
+      
+      if(kf_detected_edges.at<uchar>(y_idx, x_idx) == 255 && withinOri(edge_dir*180./M_PI, kf_edge_dir.at<float>(y_idx, x_idx)*180./M_PI, 20))
+      {
         // Found correspondence
         // Store vimg and KF 2D correspondences
         EdgeTrackingUtil::SamplePoint sp; 
@@ -210,11 +363,8 @@ std::vector<EdgeTrackingUtil::SamplePoint> EdgeTrackingUtil::getEdgeMatches(cons
       y_idx = p_kf(1) - d*sin(edge_dir);
       if(x_idx < 0 || x_idx >= kf_detected_edges.cols || y_idx < 0 || y_idx >= kf_detected_edges.rows)
         continue;
-      if(kf_detected_edges.at<uchar>(y_idx, x_idx) == 255 && withinOri(edge_dir*180./M_PI, kf_edge_dir.at<float>(y_idx, x_idx)*180./M_PI, 15))
+      if(kf_detected_edges.at<uchar>(y_idx, x_idx) == 255 && withinOri(edge_dir*180./M_PI, kf_edge_dir.at<float>(y_idx, x_idx)*180./M_PI, 20))
       {
-        double p_cam_depth = vdepth.at<float>(int(pt.y), int(pt.x));
-        if(p_cam_depth == 0 || p_cam_depth == -1)
-          continue;
         // Found correspondence
         // Store vimg and KF 2D correspondences
         EdgeTrackingUtil::SamplePoint sp; 
@@ -237,10 +387,91 @@ std::vector<EdgeTrackingUtil::SamplePoint> EdgeTrackingUtil::getEdgeMatches(cons
     }
   }
 
+  return sps;
+}
+
+
+
+std::vector<EdgeTrackingUtil::SamplePoint> EdgeTrackingUtil::getEdgeMatches(const Mat& vimg, 
+  const Mat& kf, const Eigen::Matrix3f vimgK, const Eigen::Matrix3f K, const Mat& vdepth, 
+  const Mat& kf_mask, const Eigen::Matrix4f& vimgTf)
+{
+  std::clock_t start;
+  // Get edges from vimg and kf using canny
+  Mat kf_detected_edges, vimg_detected_edges;
+
+  start = std::clock();
+  double canny_low_thresh1, canny_low_thresh2, canny_high_thresh1, canny_high_thresh2;
+  if(autotune_canny)
+  {
+    double med1 = getMedian(kf);
+    double med2 = getMedian(vimg, 1); // 1 ignores black background
+    canny_low_thresh1 = (1-canny_sigma)*med1;
+    canny_low_thresh2 = (1-canny_sigma)*med2;
+    canny_high_thresh1 = (1+canny_sigma)*med1;
+    canny_high_thresh2 = (1+canny_sigma)*med2;
+  }
+  else
+  {
+    canny_low_thresh1 = canny_low_thresh;
+    canny_low_thresh2 = canny_low_thresh;
+    canny_high_thresh1 = canny_high_thresh;
+    canny_high_thresh2 = canny_high_thresh;
+  }
+  std::cout << "Canny thresh time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC) << std::endl;
+
+  // do both cannys at once since it's slow
+  start = std::clock();
+  boost::thread canny_thread = boost::thread(Canny, boost::ref(kf), boost::ref(kf_detected_edges), 
+    canny_low_thresh1, 
+    canny_high_thresh1, 3, false);
+    
+  Canny(vimg, vimg_detected_edges, canny_low_thresh2, canny_high_thresh2, 3);
+  std::cout << "Canny 2 time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC) << std::endl;
+
+  start = std::clock();
+  canny_thread.join();
+  std::cout << "Canny 1 time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC) << std::endl;
+
+  Mat vimg_edge_pts_mat, kf_edge_pts_mat;
+  findNonZero(vimg_detected_edges, vimg_edge_pts_mat);
+  findNonZero(kf_detected_edges, kf_edge_pts_mat);
+  std::vector<Point> vimg_edge_pts(vimg_edge_pts_mat.total());
+  std::vector<Point> kf_edge_pts(kf_edge_pts_mat.total());
+  for(int i = 0; i < vimg_edge_pts_mat.total(); i++)
+  {
+    vimg_edge_pts[i] = vimg_edge_pts_mat.at<Point>(i);
+  } 
+  for(int i = 0; i < kf_edge_pts_mat.total(); i++)
+  {
+    if(kf_mask.at<uchar>(kf_edge_pts_mat.at<Point>(i).y, kf_edge_pts_mat.at<Point>(i).x) > 0)
+      kf_edge_pts[i] = kf_edge_pts_mat.at<Point>(i);
+  } 
+  std::cout << "Canny time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC) << std::endl;
+
+  //Get all edge points in vimg and gradients
+  start = std::clock();
+  Mat kf_edge_dir;
+  std::vector<double> vimg_edge_dirs = calcImageGradientDirection(vimg, vimg_edge_pts);
+  start = std::clock();
+  calcImageGradientDirection(kf_edge_dir, kf, kf_edge_pts);
+  //std::vector<double> kf_edge_dirs = calcImageGradientDirection(kf, kf_edge_pts);
+  std::cout << "Edge grad time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC) << std::endl;
+
+  start = std::clock();
+  std::vector<SamplePoint> sps = getEdgeMatches(vimg_edge_pts, vimg_edge_dirs, kf_detected_edges, 
+                                   kf_edge_dir, vimgK, K, vdepth, vimgTf);
+  //std::vector<SamplePoint> sps = getWindowedEdgeMatches(vimg, vimg_edge_pts, vimg_edge_dirs, 
+  //                                 kf,  kf_detected_edges, 
+  //                                 kf_edge_dir, vimgK, K, vdepth, vimgTf);
+  std::cout << "Edge match time: " << (std::clock() - start) / (double)(CLOCKS_PER_SEC) << std::endl;
   if(show_debug)
   {
     Mat edge_dir_im;
     drawGradientLines(edge_dir_im, vimg_detected_edges, vimg_edge_pts, vimg_edge_dirs); 
+
+    //Mat kf_edge_dir_im;
+    //drawGradientLines(kf_edge_dir_im, kf_detected_edges, kf_edge_pts, kf_edge_dirs);
 
     Mat edge_matching_overlay;
     drawEdgeMatching(edge_matching_overlay, kf, sps);
@@ -251,18 +482,18 @@ std::vector<EdgeTrackingUtil::SamplePoint> EdgeTrackingUtil::getEdgeMatches(cons
     imshow( "Virtual Edges", vimg_detected_edges ); 
     namedWindow( "Virtual Edge Directions", WINDOW_NORMAL );// Create a window for display.
     imshow( "Virtual Edge Directions", edge_dir_im ); 
+    //namedWindow( "Query Edge Directions", WINDOW_NORMAL );// Create a window for display.
+    //imshow( "Query Edge Directions", kf_edge_dir_im ); 
     namedWindow( "Edge Matching", WINDOW_NORMAL );// Create a window for display.
     imshow( "Edge Matching", edge_matching_overlay ); 
     waitKey(1);
   }
-
   return sps;
 }  
 
 void EdgeTrackingUtil::getEstimatedPoseIRLS(Eigen::Matrix4f& pose_cur, const Eigen::Matrix4f& pose_pre, const std::vector<SamplePoint>& vSamplePt, const Eigen::Matrix3f& intrinsics)
 {
-  double maxd_ = 10.;
-  double alpha_ = 64.;
+  double alpha_ = 32.;
   // use a numerical non-linear optimization (weighted least square) to find pose (P)
 
   TooN::Matrix<3,3, double> R;
@@ -280,7 +511,7 @@ void EdgeTrackingUtil::getEstimatedPoseIRLS(Eigen::Matrix4f& pose_cur, const Eig
   WLS<6> wls;
   for(int i=0; i<int(vSamplePt.size()); i++)
   {
-    if(vSamplePt[i].dist < maxd_)
+    if(vSamplePt[i].dist < dmax)
     {
       // INVERSE 1/(alpha_ + dist)
       wls.add_mJ(
@@ -347,4 +578,23 @@ TooN::Vector<6> EdgeTrackingUtil::calcJacobian(const CvPoint3D32f& pts3, const C
   }
 
   return J;
+}
+
+void EdgeTrackingUtil::getEstimatedPosePnP(Eigen::Matrix4f& pose_cur, const Eigen::Matrix4f& pose_pre,
+  const std::vector<SamplePoint>& vSamplePt, const cv::Mat& intrinsics)
+{
+  double pnpReprojError;
+  std::vector<int> inlierIdx;
+  Eigen::Matrix<float, 6, 6> cov;
+  std::vector<Point3f> matchPts3d(vSamplePt.size());  
+  std::vector<Point2f> matchPts(vSamplePt.size());  
+
+  for(int i = 0; i < vSamplePt.size(); i++)
+  {
+    matchPts3d[i] = vSamplePt[i].coord3;
+    matchPts[i] = vSamplePt[i].edge_pt2;
+  }
+
+  PnPUtil::RansacPnP(matchPts3d, matchPts, intrinsics, pose_pre, pose_cur, inlierIdx, 
+    &pnpReprojError, &cov);
 }

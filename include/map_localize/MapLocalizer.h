@@ -14,6 +14,7 @@
 #include "KeyframeMatch.h"
 #include "MapFeatures.h"
 #include "EdgeTrackingUtil.h"
+#include "IMUMotionModel.h"
 
 #include "pcl_ros/point_cloud.h"
 #include <pcl/point_cloud.h>
@@ -38,14 +39,15 @@ public:
 
 private:
   Eigen::Matrix4f FindImageTfPnp(KeyframeContainer* kcv, const MapFeatures& mf);
-  bool FindImageTfVirtualPnp(KeyframeContainer* kcv, Eigen::Matrix4f vimgTf, Eigen::Matrix4f& out, std::string vdesc_type, bool mask_kf);
+  bool FindImageTfVirtualPnp(KeyframeContainer* kcv, Eigen::Matrix4f vimgTf, Eigen::Matrix4f& out, std::string vdesc_type, bool mask_kf, Eigen::Matrix<float, 6, 6>& cov);
   bool FindImageTfVirtualEdges(KeyframeContainer* kcv, Eigen::Matrix4f vimgTf, Eigen::Matrix4f& out, bool mask_kf);
   std::vector<pcl::PointXYZ> GetPointCloudFromFrames(KeyframeContainer*, KeyframeContainer*);
   std::vector<int> FindPlaneInPointCloud(const std::vector<pcl::PointXYZ>& pts);
   Mat GetVirtualImageFromTopic(Mat& depths, Mat& mask);
   Mat GenerateVirtualImage(Eigen::Matrix4f tf, Eigen::Matrix3f K, int height, int width, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud, Mat& depth, Mat& mask);
 
-  void UpdateMotionModel(const Eigen::Matrix4f& olfTf, const Eigen::Matrix4f& newTf, double dt);
+  void UpdateMotionModel(const Eigen::Matrix4f& olfTf, const Eigen::Matrix4f& newTf, 
+    const Eigen::Matrix<float, 6, 6>& cov, double dt);
   Eigen::Matrix4f ApplyMotionModel(double dt);
   void ResetMotionModel();
 
@@ -67,7 +69,7 @@ private:
   Eigen::Matrix4f StringToMatrix4f(std::string);
   std::vector<Point3d> PCLToPoint3d(const std::vector<pcl::PointXYZ>& cpvec);
   void ReprojectMask(cv::Mat& dst, const cv::Mat& src, const Eigen::Matrix3f& dstK, 
-    const Eigen::Matrix3f& srcK, const cv::Mat& src_depth);
+    const Eigen::Matrix3f& srcK);
 
   std::vector<CameraContainer*> cameras;
   
@@ -79,11 +81,13 @@ private:
   std::vector<Eigen::Vector3f> positionList;
   Eigen::Matrix4f currentPose;
   bool get_frame;
+  bool spinning;
   bool get_virtual_image;
   bool get_virtual_depth;
   int numPnpRetrys;
   int numLocalizeRetrys;
   double pnpReprojError;
+  double pixel_noise;
 
   MonocularLocalizer* localization_init;
   VirtualImageGenerator* vig;
@@ -109,7 +113,13 @@ private:
   double image_scale;
   double canny_high_thresh;
   double canny_low_thresh;
+  double canny_sigma;
+  bool autotune_canny;
+  double edge_tracking_dmax;
+  int edge_tracking_iterations;
   double pnp_match_radius;
+  std::string motion_model;
+  bool do_undistort;
 
   ros::NodeHandle nh;
   ros::NodeHandle nh_private;
@@ -148,6 +158,10 @@ private:
   Mat map_distcoeffcv;
   int virtual_height;
   int virtual_width;
+  bool init_undistort;
+  Mat undistort_map1, undistort_map2;
+
+  IMUMotionModel * imu_mm;
 };
 
 #endif

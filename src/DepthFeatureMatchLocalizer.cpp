@@ -34,7 +34,7 @@ bool DepthFeatureMatchLocalizer::localize(const Mat& img, const Mat& Kcv, Eigen:
   double bestReprojError;
   for(int i = 0; i < matches.size(); i++)
   {
-    if(matches[i].matchKps1.size() >= 30)
+    if(matches[i].matchKps1.size() >= 10)
     { 
       std::vector<int> inlierIdx;
       Eigen::Matrix4f vimgTf = matches[i].kfc->GetTf();
@@ -101,8 +101,6 @@ bool DepthFeatureMatchLocalizer::localize(const Mat& img, const Mat& Kcv, Eigen:
       waitKey(1);
     }
     std::cout << "DepthFeatureMatchLocalizer: Found consistent match (" << bestInliers.size() << " inliers).  Avg reproj error: " << bestReprojError << std::endl;
-    std::cout << "PnpPose=" << std::endl << *pose << std::endl;
-    std::cout << "MatchPose=" << std::endl << matches[bestMatch].kfc->GetTf() << std::endl;
     return true;
   }
   else

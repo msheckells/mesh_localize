@@ -25,7 +25,7 @@ std::vector<Point3f> PnPUtil::BackprojectPts(const std::vector<Point2f>& pts, co
   return pts3d;
 }
 
-bool PnPUtil::RansacPnP(const std::vector<Point3f>& matchPts3d, const std::vector<Point2f>& matchPts, Mat Kcv, Eigen::Matrix4f tfguess, Eigen::Matrix4f& tf, std::vector<int>& bestInliersIdx, double* avgReprojError)
+bool PnPUtil::RansacPnP(const std::vector<Point3f>& matchPts3d, const std::vector<Point2f>& matchPts, Mat Kcv, Eigen::Matrix4f tfguess, Eigen::Matrix4f& tf, std::vector<int>& bestInliersIdx, double* avgReprojError, Eigen::Matrix<float, 6, 6>* cov)
 {
   bestInliersIdx.clear();
   Mat distcoeffcvPnp = (Mat_<double>(4,1) << 0, 0, 0, 0);
@@ -130,11 +130,28 @@ bool PnPUtil::RansacPnP(const std::vector<Point3f>& matchPts3d, const std::vecto
   {
     *avgReprojError = 0;
     std::vector<Point2f> reprojPts;
-    projectPoints(inlierPts3d, Rvec, t, Kcv, distcoeffcvPnp, reprojPts);
+    Mat J;
+    projectPoints(inlierPts3d, Rvec, t, Kcv, distcoeffcvPnp, reprojPts, J);
     for(unsigned int j = 0; j < reprojPts.size(); j++)
     {
       double reprojError = sqrt((reprojPts[j].x-inlierPts2d[j].x)*(reprojPts[j].x-inlierPts2d[j].x) + (reprojPts[j].y-inlierPts2d[j].y)*(reprojPts[j].y-inlierPts2d[j].y));
       *avgReprojError += reprojError/reprojPts.size();
+    }
+    // Compute covariance matrix of rotation and translation
+    Mat Sigma = Mat(J.t() * J, Rect(0,0,6,6)).inv();
+
+    // Compute standard deviation
+    //Mat std_dev;
+    //sqrt(Sigma.diag(), std_dev);
+    
+    if(cov)
+    {
+      cov->setZero();
+      for(int i = 0; i < Sigma.rows; i++)
+      {
+        cov->diagonal()[i] = Sigma.at<double>(i,i);
+      }
+      //std::cout << "R, t covariance:" << std::endl << *cov << std::endl;
     }
   }
     
@@ -145,6 +162,8 @@ bool PnPUtil::RansacPnP(const std::vector<Point3f>& matchPts3d, const std::vecto
         R.at<double>(1,0), R.at<double>(1,1), R.at<double>(1,2), t.at<double>(1),
         R.at<double>(2,0), R.at<double>(2,1), R.at<double>(2,2), t.at<double>(2),
              0,      0,      0,    1;
+
+
   return true;
 
 }
