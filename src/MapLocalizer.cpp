@@ -47,7 +47,6 @@
 MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     init_undistort(true),
     get_frame(true),
-    spinning(false),
     get_virtual_image(false),
     get_virtual_depth(false),
     numPnpRetrys(0),
@@ -209,11 +208,6 @@ MapLocalizer::MapLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
  
   estimated_pose_pub = nh.advertise<geometry_msgs::PoseStamped>("/map_localize/estimated_pose", 1);
   map_marker_pub = nh.advertise<visualization_msgs::Marker>("/map_localize/map", 1);
-  match_marker_pub = nh.advertise<visualization_msgs::Marker>("/map_localize/match_points", 1);
-  tvec_marker_pub = nh.advertise<visualization_msgs::MarkerArray>("/map_localize/t_vectors", 1);
-  epos_marker_pub = nh.advertise<visualization_msgs::Marker>("/map_localize/estimated_position", 1);
-  apos_marker_pub = nh.advertise<visualization_msgs::Marker>("/map_localize/actual_position", 1);
-  path_marker_pub = nh.advertise<visualization_msgs::Marker>("/map_localize/estimated_path", 1);
   pointcloud_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZ> >("/map_localize/pointcloud", 1);
 
   image_sub = nh.subscribe<sensor_msgs::Image>("image", 1, &MapLocalizer::HandleImage, this, ros::TransportHints().tcpNoDelay());
@@ -422,8 +416,8 @@ void MapLocalizer::PublishPose(Eigen::Matrix4f tf)
   tf_transform.setBasis(tf::Matrix3x3(tf(0,0), tf(0,1), tf(0,2),
                                       tf(1,0), tf(1,1), tf(1,2),
                                       tf(2,0), tf(2,1), tf(2,2)));
-  br.sendTransform(tf::StampedTransform(tf_transform, img_time_stamp, "world", "camera_pose"));
-  br.sendTransform(tf::StampedTransform(tf_transform.inverse(), img_time_stamp, "world", "object_pose"));
+  //br.sendTransform(tf::StampedTransform(tf_transform, img_time_stamp, "world", "camera"));
+  br.sendTransform(tf::StampedTransform(tf_transform.inverse(), img_time_stamp, "camera", "object_pose"));
 }
 
 // decaying velocity model
@@ -482,9 +476,8 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
   PublishMap();
 
   ros::Time start;
-  if(!spinning && !get_frame && !get_virtual_image && !get_virtual_depth)
+  if(!get_frame && !get_virtual_image && !get_virtual_depth)
   {
-    spinning = true;
     ros::Time current_time = ros::Time::now();
     double dt = (current_time - last_spin_time).toSec();
     last_spin_time = current_time;
@@ -501,7 +494,6 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
         ResetMotionModel();
         localize_state = PNP;
         delete kf;
-        spinning = false;
         return;
       }
       ROS_INFO("FindImageTfVirtualEdges time: %f", (ros::Time::now()-start).toSec());  
@@ -515,14 +507,11 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       Eigen::Matrix<float, 6, 6> cov;
       UpdateMotionModel(currentPose, imgTf, cov, dt);
 
-
       currentPose = imgTf;
       UpdateVirtualSensorState(currentPose);
       PublishPose(currentPose);
       //std::cout << "Estimated tf: " << std::endl << imgTf << std::endl;
       //std::cout << "Actual tf: " << std::endl << kf->GetTf() << std::endl;
-      positionList.push_back(imgTf.block<3,1>(0,3));
-      PublishTfViz(imgTf, kf->GetTf());
       ROS_INFO("Found image tf");
       delete kf;
     }
@@ -551,7 +540,6 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
           numPnpRetrys = 0;
           localize_state = LOCAL_INIT;
         }
-        spinning = false;
         delete kf;
         return;
       }
@@ -567,8 +555,6 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       PublishPose(currentPose);
       //std::cout << "Estimated tf: " << std::endl << imgTf << std::endl;
       //std::cout << "Actual tf: " << std::endl << kf->GetTf() << std::endl;
-      positionList.push_back(imgTf.block<3,1>(0,3));
-      PublishTfViz(imgTf, kf->GetTf());
       ROS_INFO("Found image tf");
       delete kf;
     }
@@ -588,7 +574,6 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
         ROS_INFO("PnP init failed, reinitializing using last known pose");
         localize_state = LOCAL_INIT;
         
-        spinning = false;
         delete kf;
         return;
       }
@@ -605,8 +590,6 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
       currentPose = imgTf;
       UpdateVirtualSensorState(currentPose);
       PublishPose(currentPose);
-      positionList.push_back(imgTf.block<3,1>(0,3));
-      PublishTfViz(imgTf, kf->GetTf());
       ROS_INFO("Found image tf");
       delete kf;
     }
@@ -634,8 +617,6 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
         currentPose = pose;
         UpdateVirtualSensorState(currentPose);
         PublishPose(currentPose);
-        positionList.push_back(currentPose.block<3,1>(0,3));
-        //PublishTfViz(currentPose, kf->GetTf());
       }
       else
       {
@@ -645,7 +626,6 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
           ROS_INFO("Fully reinitializing");
           localize_state = INIT;
         }
-        spinning = false;
       }
 
       ROS_INFO("LocalizationInit time: %f", (ros::Time::now()-start).toSec());  
@@ -654,7 +634,6 @@ void MapLocalizer::spin(const ros::TimerEvent& e)
     ROS_INFO("Spin time: %f", (ros::Time::now() - spin_time).toSec());
     spin_time = ros::Time::now();
 
-    spinning = false;
     get_frame = true;
   }
 }
@@ -678,108 +657,6 @@ void MapLocalizer::PublishPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pc)
 
   pc->header = pcl_conversions::toPCL(pc2.header);
   pointcloud_pub.publish(pc);
-}
-
-void MapLocalizer::PublishSfmMatchViz(std::vector<KeyframeMatch > matches, std::vector< Eigen::Vector3f > tvecs)
-{
-  const double ptSize = 0.1;
-
-  std::vector<geometry_msgs::Point> match_pos;
-  for(unsigned int i = 0; i < matches.size(); i++)
-  {
-    geometry_msgs::Point pt;
-    pt.x = matches[i].kfc->GetTf()(0,3);
-    pt.y = matches[i].kfc->GetTf()(1,3);
-    pt.z = matches[i].kfc->GetTf()(2,3);
-    match_pos.push_back(pt);
-  }
-  visualization_msgs::Marker match_marker;
-
-  match_marker.header.frame_id = "/markers";
-  match_marker.header.stamp = ros::Time();
-  match_marker.ns = "map_localize";
-  match_marker.id = 1;
-  match_marker.type = visualization_msgs::Marker::POINTS;
-  match_marker.action = visualization_msgs::Marker::ADD;
-  match_marker.pose.position.x = 0;
-  match_marker.pose.position.y = 0;
-  match_marker.pose.position.z = 0;
-  match_marker.pose.orientation.x = 0;
-  match_marker.pose.orientation.y = 0;
-  match_marker.pose.orientation.z = 0;
-  match_marker.pose.orientation.w = 0;
-  match_marker.scale.x = ptSize;
-  match_marker.scale.y = ptSize;
-  match_marker.scale.z = ptSize;
-  match_marker.color.a = 1.0;
-  match_marker.color.r = 1.0;
-  match_marker.color.g = 0.0;
-  match_marker.color.b = 0.0;
-  match_marker.points = match_pos;
-
-  match_marker_pub.publish(match_marker);
-
-  
-  std::vector<visualization_msgs::Marker> tvec_markers_toremove;
-  for(unsigned int i = 0; i < 30; i++)
-  {
-    visualization_msgs::Marker tvec_marker;
-    tvec_marker.header.frame_id = "/markers";
-    tvec_marker.header.stamp = ros::Time();
-    tvec_marker.ns = "map_localize";
-    tvec_marker.id = 2+i;
-    tvec_marker.type = visualization_msgs::Marker::ARROW;
-    tvec_marker.action = visualization_msgs::Marker::DELETE;
-    
-    tvec_markers_toremove.push_back(tvec_marker);
-  }
-  visualization_msgs::MarkerArray tvec_array_toremove;
-  tvec_array_toremove.markers = tvec_markers_toremove;
-
-  tvec_marker_pub.publish(tvec_array_toremove);
-
-  std::vector<visualization_msgs::Marker> tvec_markers;
-  for(unsigned int i = 0; i < matches.size(); i++)
-  {
-    visualization_msgs::Marker tvec_marker;
-    const double len = 5.0;
-    std::vector<geometry_msgs::Point> vec_pos;
-    geometry_msgs::Point endpt;
-    endpt.x = match_pos[i].x + len*tvecs[i](0);
-    endpt.y = match_pos[i].y + len*tvecs[i](1);
-    endpt.z = match_pos[i].z + len*tvecs[i](2);
-    vec_pos.push_back(match_pos[i]);
-    vec_pos.push_back(endpt);
-
-    tvec_marker.header.frame_id = "/markers";
-    tvec_marker.header.stamp = ros::Time();
-    tvec_marker.ns = "map_localize";
-    tvec_marker.id = 2+i;
-    tvec_marker.type = visualization_msgs::Marker::ARROW;
-    tvec_marker.action = visualization_msgs::Marker::ADD;
-    tvec_marker.pose.position.x = 0; 
-    tvec_marker.pose.position.y = 0; 
-    tvec_marker.pose.position.z = 0; 
-    tvec_marker.pose.orientation.x = 0;
-    tvec_marker.pose.orientation.y = 0;
-    tvec_marker.pose.orientation.z = 0;
-    tvec_marker.pose.orientation.w = 0;
-    tvec_marker.scale.x = 0.08;
-    tvec_marker.scale.y = 0.11;
-    tvec_marker.color.a = 1.0;
-    tvec_marker.color.r = 1.0;
-    tvec_marker.color.g = 0.0;
-    tvec_marker.color.b = 0.0;
-    tvec_marker.points = vec_pos;
-  
-    tvec_markers.push_back(tvec_marker);
-  }
-
-  visualization_msgs::MarkerArray tvec_array;
-  tvec_array.markers = tvec_markers;
-
-  tvec_marker_pub.publish(tvec_array);
-
 }
 
 void MapLocalizer::PublishPointCloud(const std::vector<pcl::PointXYZ>& pc)
@@ -840,110 +717,6 @@ void MapLocalizer::PublishMap()
   marker.mesh_resource = std::string("package://map_localize") + mesh_filename;
 
   map_marker_pub.publish(marker);
-}
-
-void MapLocalizer::PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImgTf)
-{
-  const double ptSize = 0.1;
-
-  std::vector<geometry_msgs::Point> epos;
-  geometry_msgs::Point epos_pt;
-  epos_pt.x = imgTf(0,3);
-  epos_pt.y = imgTf(1,3);
-  epos_pt.z = imgTf(2,3);
-  epos.push_back(epos_pt);
-  visualization_msgs::Marker epos_marker;
- 
-  epos_marker.header.frame_id = "/markers";
-  epos_marker.header.stamp = ros::Time();
-  epos_marker.ns = "map_localize";
-  epos_marker.id = 900;
-  epos_marker.type = visualization_msgs::Marker::POINTS;
-  epos_marker.action = visualization_msgs::Marker::ADD;
-  epos_marker.pose.position.x = 0;
-  epos_marker.pose.position.y = 0;
-  epos_marker.pose.position.z = 0;
-  epos_marker.pose.orientation.x = 0;
-  epos_marker.pose.orientation.y = 0;
-  epos_marker.pose.orientation.z = 0;
-  epos_marker.pose.orientation.w = 0;
-  epos_marker.scale.x = ptSize;
-  epos_marker.scale.y = ptSize;
-  epos_marker.scale.z = ptSize;
-  epos_marker.color.a = 1.0;
-  epos_marker.color.r = 0.0;
-  epos_marker.color.g = 1.0;
-  epos_marker.color.b = 0.0;
-  epos_marker.points = epos;
-
-  epos_marker_pub.publish(epos_marker);
-
-  std::vector<geometry_msgs::Point> apos;
-  geometry_msgs::Point apos_pt;
-  apos_pt.x = actualImgTf(0,3);
-  apos_pt.y = actualImgTf(1,3);
-  apos_pt.z = actualImgTf(2,3);
-  apos.push_back(apos_pt);
-  visualization_msgs::Marker apos_marker;
- 
-  apos_marker.header.frame_id = "/markers";
-  apos_marker.header.stamp = ros::Time();
-  apos_marker.ns = "map_localize";
-  apos_marker.id = 901;
-  apos_marker.type = visualization_msgs::Marker::POINTS;
-  apos_marker.action = visualization_msgs::Marker::ADD;
-  apos_marker.pose.position.x = 0;
-  apos_marker.pose.position.y = 0;
-  apos_marker.pose.position.z = 0;
-  apos_marker.pose.orientation.x = 0;
-  apos_marker.pose.orientation.y = 0;
-  apos_marker.pose.orientation.z = 0;
-  apos_marker.pose.orientation.w = 0;
-  apos_marker.scale.x = ptSize;
-  apos_marker.scale.y = ptSize;
-  apos_marker.scale.z = ptSize;
-  apos_marker.color.a = 1.0;
-  apos_marker.color.r = 0.0;
-  apos_marker.color.g = 0.0;
-  apos_marker.color.b = 1.0;
-  apos_marker.points = apos;
-
-  apos_marker_pub.publish(apos_marker);
-  
-  std::vector<geometry_msgs::Point> pathPts;
-  for(unsigned int i = 0; i < positionList.size(); i++)
-  {
-    geometry_msgs::Point pt;
-    pt.x = positionList[i](0);//0.5;
-    pt.y = positionList[i](1);//0.5;
-    pt.z = positionList[i](2);//0.5;
-    pathPts.push_back(pt);
-  }
-
-  visualization_msgs::Marker path_viz;
-  path_viz.header.frame_id = "/markers";
-  path_viz.header.stamp = ros::Time();
-  path_viz.ns = "map_localize";
-  path_viz.id = 902;
-  path_viz.type = visualization_msgs::Marker::LINE_STRIP;
-  path_viz.action = visualization_msgs::Marker::ADD;
-  path_viz.pose.position.x = 0;
-  path_viz.pose.position.y = 0;
-  path_viz.pose.position.z = 0;
-  path_viz.pose.orientation.x = 0;
-  path_viz.pose.orientation.y = 0;
-  path_viz.pose.orientation.z = 0;
-  path_viz.pose.orientation.w = 0;
-  path_viz.scale.x = .05;
-  path_viz.color.a = 1.0;
-  path_viz.color.r = 0;
-  path_viz.color.g = 1.0;
-  path_viz.color.b = 0;
-  path_viz.points = pathPts;
-
-  path_marker_pub.publish(path_viz);
-
-
 }
 
 Mat MapLocalizer::GetVirtualImageFromTopic(Mat& depths, Mat& mask)
@@ -1170,7 +943,8 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
 
   start = ros::Time::now();
   std::vector<EdgeTrackingUtil::SamplePoint> sps = 
-    EdgeTrackingUtil::getEdgeMatches(vimg_masked, kfc->GetImage(), vimgK, K_scaled, depth, kf_mask, vimgTf);
+    EdgeTrackingUtil::getEdgeMatches(vimg_masked, kfc->GetImage(), vimgK, K_scaled, depth, 
+      kf_mask, vimgTf);
   ROS_INFO("VirtualEdges: Edge matching time: %f", (ros::Time::now()-start).toSec());  
 
   double avgError = 0;
@@ -1180,7 +954,7 @@ bool MapLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matrix
   }
   avgError /= sps.size();
 
-  
+  // hacky way to detect failure 
   if(avgError > 15 || sps.size() < 15)
     return false;
   

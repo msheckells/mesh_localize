@@ -51,9 +51,7 @@ private:
   Eigen::Matrix4f ApplyMotionModel(double dt);
   void ResetMotionModel();
 
-  void PublishTfViz(Eigen::Matrix4f imgTf, Eigen::Matrix4f actualImgTf);
   void PublishPose(Eigen::Matrix4f tf);
-  void PublishSfmMatchViz(std::vector<KeyframeMatch > matches, std::vector< Eigen::Vector3f > tvecs);
   void PublishMap();
   void PublishPointCloud(const std::vector<pcl::PointXYZ>&);
   void PublishPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pc);
@@ -65,8 +63,6 @@ private:
   void HandleVirtualDepth(const sensor_msgs::ImageConstPtr& msg);
   void UpdateVirtualSensorState(Eigen::Matrix4f tf);
 
-  bool WriteDescriptorsToFile(std::string filename);
-  Eigen::Matrix4f StringToMatrix4f(std::string);
   std::vector<Point3d> PCLToPoint3d(const std::vector<pcl::PointXYZ>& cpvec);
   void ReprojectMask(cv::Mat& dst, const cv::Mat& src, const Eigen::Matrix3f& dstK, 
     const Eigen::Matrix3f& srcK);
@@ -81,7 +77,6 @@ private:
   std::vector<Eigen::Vector3f> positionList;
   Eigen::Matrix4f currentPose;
   bool get_frame;
-  bool spinning;
   bool get_virtual_image;
   bool get_virtual_depth;
   int numPnpRetrys;
@@ -127,11 +122,6 @@ private:
   ros::ServiceClient gazebo_client;
   ros::Publisher  estimated_pose_pub;
   ros::Publisher  map_marker_pub;
-  ros::Publisher match_marker_pub;
-  ros::Publisher tvec_marker_pub;
-  ros::Publisher epos_marker_pub;
-  ros::Publisher apos_marker_pub;
-  ros::Publisher path_marker_pub;
   ros::Publisher pointcloud_pub;
   tf::TransformBroadcaster br;
 

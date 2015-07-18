@@ -52,14 +52,15 @@ public:
   static void calcImageGradientDirection(cv::Mat& dst, const cv::Mat& src);
   static void calcImageGradientDirection(cv::Mat& dst, const cv::Mat& src, const std::vector<cv::Point>& pts);
 
-  static double l2Norm(std::vector<double>& d1, std::vector<double> d2);
-  static bool extractEdgeDescriptor(std::vector<double>& desc, const cv::Mat& im, cv::Point pt, 
+  static double ncc(const Eigen::VectorXd& d1, const Eigen::VectorXd& d2);
+  static bool extractEdgeDescriptor(Eigen::VectorXd& desc, const cv::Mat& im, cv::Point pt, 
     double edge_dir, unsigned int window_size);
   static void drawGradientLines(cv::Mat& dst, const cv::Mat& src, const cv::Mat& edges, 
     const cv::Mat& gdir);
   static void drawGradientLines(cv::Mat& dst, const cv::Mat& src, const std::vector<cv::Point>& edges,
     const std::vector<double>& gdir);
   static void drawEdgeMatching(cv::Mat& dst, const cv::Mat& src, const std::vector<SamplePoint>& sps);
+  static void drawLines(cv::Mat& dst, const cv::Mat& src, const std::vector<cv::Vec4i>& lines);
   static bool withinOri(float o1, float o2, float oth);
   static double getMedian(const cv::Mat& im, int start_bin=0);
 
