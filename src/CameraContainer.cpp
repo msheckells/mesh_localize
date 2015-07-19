@@ -1,4 +1,4 @@
-#include "map_localize/CameraContainer.h"
+#include "mesh_localize/CameraContainer.h"
 
 CameraContainer::CameraContainer(Mat image, Eigen::Matrix4f tf, Eigen::Matrix3f K) :
   tf(tf),

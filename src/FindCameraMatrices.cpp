@@ -9,8 +9,8 @@
 *   http://www.packtpub.com/cool-projects-with-opencv/book
 *****************************************************************************/
 
-#include "map_localize/FindCameraMatrices.h"
-#include "map_localize/Triangulation.h"
+#include "mesh_localize/FindCameraMatrices.h"
+#include "mesh_localize/Triangulation.h"
 
 #include <vector>
 #include <iostream>

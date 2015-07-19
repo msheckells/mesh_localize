@@ -1,4 +1,4 @@
-#include "map_localize/PointCloudImageGenerator.h"
+#include "mesh_localize/PointCloudImageGenerator.h"
 
 #include <opencv2/imgproc/imgproc.hpp>
 

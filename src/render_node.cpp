@@ -6,7 +6,7 @@
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/image_encodings.h>
 #include <cv_bridge/cv_bridge.h>
-#include "map_localize/OgreImageGenerator.h"
+#include "mesh_localize/OgreImageGenerator.h"
 
 using namespace cv;
 
@@ -21,7 +21,7 @@ int main (int argc, char **argv)
   if(!nh_private.getParam("step_size", step_size))
     step_size = 0.1;
 
-  std::string resource_path = ros::package::getPath("map_localize");
+  std::string resource_path = ros::package::getPath("mesh_localize");
   resource_path += "/ogre_cfg/";
   OgreImageGenerator oig(resource_path,"box.mesh");
   Eigen::Matrix3f K = oig.GetK();

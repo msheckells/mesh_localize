@@ -1,5 +1,5 @@
-#include "map_localize/KeyframeContainer.h"
-#include "map_localize/ASiftDetector.h"
+#include "mesh_localize/KeyframeContainer.h"
+#include "mesh_localize/ASiftDetector.h"
 #include "opencv2/features2d/features2d.hpp"
 #include <opencv2/gpu/gpu.hpp>
 #include <opencv2/nonfree/gpu.hpp>

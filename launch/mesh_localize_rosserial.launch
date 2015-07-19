@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+<!--Start the rosserial_python node-->
+<arg name="serial_number" default="0"/>
+  <node name="rosserial_node$(arg serial_number)" pkg="rosserial_python" type="serial_node.py" args="_port:=/dev/ttyACM$(arg serial_number) _baud:=921600" output="screen"/>
+
+</launch>
+

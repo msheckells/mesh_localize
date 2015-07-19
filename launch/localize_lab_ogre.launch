@@ -1,6 +1,6 @@
 <launch>
-        <!-- Start map_localize_node -->
-	<node name="map_localize" pkg="map_localize" type="map_localize_node" output="screen">
+        <!-- Start mesh_localize_node -->
+	<node name="mesh_localize" pkg="mesh_localize" type="mesh_localize_node" output="screen">
 		<remap from="image" to="/camera/image_mono" />
 		<remap from="camera_info" to="/camera/camera_info" />
 
@@ -12,8 +12,8 @@
 		<param name="pnp_descriptor_type" type="string" value="orb"/>
 		<param name="img_match_descriptor_type" type="string" value="surf"/>
 		<param name="global_localization_alg" type="string" value="depth_feature_match"/>
-		<param name="ogre_data_dir" type="string" value="$(find map_localize)/data/lab_cage"/>
-		<param name="ogre_cfg_dir" type="string" value="$(find map_localize)/ogre_cfg/"/>
+		<param name="ogre_data_dir" type="string" value="$(find mesh_localize)/data/lab_cage"/>
+		<param name="ogre_cfg_dir" type="string" value="$(find mesh_localize)/ogre_cfg/"/>
 		<param name="ogre_model" type="string" value="lab_cage.mesh"/>
 	</node>
 </launch>

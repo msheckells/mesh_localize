@@ -1,4 +1,4 @@
-#include "map_localize/OgreImageGenerator.h"
+#include "mesh_localize/OgreImageGenerator.h"
 
 using namespace cv;
 

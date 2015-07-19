@@ -1,4 +1,4 @@
-#include "map_localize/MapFeatures.h"
+#include "mesh_localize/MapFeatures.h"
 
 MapFeatures::MapFeatures(std::vector<KeyframeContainer*>& kcv,  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud) :
 kcv(kcv), cloud(cloud)

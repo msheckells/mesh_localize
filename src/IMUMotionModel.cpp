@@ -1,4 +1,4 @@
-#include "map_localize/IMUMotionModel.h"
+#include "mesh_localize/IMUMotionModel.h"
 
 #include <tf/transform_broadcaster.h>
 
@@ -297,11 +297,11 @@ void IMUMotionModel::publishTf()
   trfm_ins.setRotation(q);
 
   static tf::TransformBroadcaster br;
-  br.sendTransform(tf::StampedTransform(trfm_rot, ros::Time::now(), "world", "map_localizer/imu"));
+  br.sendTransform(tf::StampedTransform(trfm_rot, ros::Time::now(), "world", "mesh_localizer/imu"));
   br.sendTransform(tf::StampedTransform(trfm_ins_no_trans, ros::Time::now(), "world", 
-    "map_localizer/ins_no_trans"));
+    "mesh_localizer/ins_no_trans"));
   br.sendTransform(tf::StampedTransform(trfm_ins, ros::Time::now(), "world", 
-    "map_localizer/ins"));
+    "mesh_localizer/ins"));
   //std::cout << "v = " << ins_pre_correct_state.v.transpose() << std::endl;
 }
 

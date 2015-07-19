@@ -1,4 +1,4 @@
-#include "map_localize/ASiftDetector.h"
+#include "mesh_localize/ASiftDetector.h"
 
 #include <iostream>
 

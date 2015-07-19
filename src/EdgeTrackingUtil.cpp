@@ -1,5 +1,5 @@
-#include "map_localize/EdgeTrackingUtil.h"
-#include "map_localize/PnPUtil.h"
+#include "mesh_localize/EdgeTrackingUtil.h"
+#include "mesh_localize/PnPUtil.h"
 #include "TooN/TooN.h"
 #include "TooN/SVD.h"       // for SVD
 #include "TooN/so3.h"       // for special orthogonal group
