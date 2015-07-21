@@ -42,8 +42,6 @@
 
 #include <gcop/so3.h>
 
-//#include <kvld/kvld.h>
-
 MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     init_undistort(true),
     get_frame(true),
@@ -100,8 +98,8 @@ MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     edge_tracking_dmax = 15;
   if(!nh_private.getParam("autotune_canny", autotune_canny))
     autotune_canny = false;
-  if(!nh_private.getParam("enable_edge_tracking", enable_edge_tracking))
-    enable_edge_tracking = false;
+  if(!nh_private.getParam("tracking_mode", tracking_mode))
+    tracking_mode = "PNP";
   if(!nh_private.getParam("edge_tracking_iterations", edge_tracking_iterations))
     edge_tracking_iterations = 1;
   if(!nh_private.getParam("pnp_match_radius", pnp_match_radius))
@@ -113,7 +111,7 @@ MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   if(!nh_private.getParam("pixel_noise", pixel_noise))
     pixel_noise = 3;
   
-  if(enable_edge_tracking)
+  if(tracking_mode == "EDGE")
   {
     EdgeTrackingUtil::show_debug = show_debug;
     EdgeTrackingUtil::canny_high_thresh = canny_high_thresh;
@@ -482,7 +480,94 @@ void MeshLocalizer::spin(const ros::TimerEvent& e)
     double dt = (current_time - last_spin_time).toSec();
     last_spin_time = current_time;
 
-    if(localize_state == EDGES)
+    if(localize_state == KLT_INIT)
+    {
+      // if init, 
+      //   give last image (presumably from pnp) to video tracker
+      //   give depth map for this image (from the render engine)
+      //   backproject initial key points to 3D
+      ROS_INFO("Initializing KLT tracking...");
+      Mat vimg, depth, mask, reproj_mask;
+      Mat output_frame;
+      Eigen::Matrix3f vimgK;
+      if(virtual_image_source == "gazebo")
+      {
+        vimgK = virtual_K; 
+        vimg = GetVirtualImageFromTopic(depth, mask);
+      }
+      else if(virtual_image_source == "ogre" || virtual_image_source == "point_cloud")
+      {
+        vimgK = vig->GetK(); 
+        vimg = vig->GenerateVirtualImage(currentPose, depth, mask);
+      }
+      else
+      {
+         ROS_ERROR("Invalid virtual_image_source");
+         return;
+      }
+      std::vector<cv::Point2f> pts2d;
+      std::vector<cv::Point3f> pts3d;
+      std::vector<int> ptIDs;
+      ReprojectMask(reproj_mask, mask, K_scaled, vimgK);
+      klt_tracker.init(klt_init_img, depth, K_scaled, vimgK, currentPose, reproj_mask); 
+      klt_tracker.processFrame(current_image, output_frame, pts2d, pts3d, ptIDs);
+
+      double pnpReprojError;
+      std::vector<int> inlierIdx;
+      Eigen::Matrix4f tfran;
+      Eigen::Matrix<float, 6, 6> cov;
+      if(!PnPUtil::RansacPnP(pts3d, pts2d, Kcv, currentPose.inverse(), tfran, inlierIdx, &pnpReprojError, &cov))
+      {
+        ResetMotionModel();
+        localize_state = PNP;
+      }
+      else
+      {
+        currentPose = tfran.inverse();
+        UpdateVirtualSensorState(currentPose);
+        PublishPose(currentPose);
+        ROS_INFO("Found image tf");
+        localize_state = KLT;
+      }
+    }
+    else if(localize_state == KLT)
+    {
+      // otherwise,
+      //   give current image to video tracker
+      //   get matched keypts  
+      //   do that PnP to get pose, bro
+      ROS_INFO("Performing KLT tracking...");
+      Mat output_frame;
+      std::vector<cv::Point2f> pts2d;
+      std::vector<cv::Point3f> pts3d;
+      std::vector<int> ptIDs;
+      klt_tracker.processFrame(current_image, output_frame, pts2d, pts3d, ptIDs);
+
+      double pnpReprojError;
+      std::vector<int> inlierIdx;
+      Eigen::Matrix4f tfran;
+      Eigen::Matrix<float, 6, 6> cov;
+      if(!PnPUtil::RansacPnP(pts3d, pts2d, Kcv, currentPose.inverse(), tfran, inlierIdx, &pnpReprojError, &cov))
+      {
+        ResetMotionModel();
+        localize_state = PNP;
+      }
+      else
+      {
+        currentPose = tfran.inverse();
+        UpdateVirtualSensorState(currentPose);
+        PublishPose(currentPose);
+        ROS_INFO("Found image tf");
+      }
+
+      if(show_debug)
+      {
+        namedWindow( "KLT Tracking", WINDOW_NORMAL );// Create a window for display.
+        imshow( "KLT Tracking", output_frame); 
+        waitKey(1);
+      }
+    }
+    else if(localize_state == EDGES)
     {
       KeyframeContainer* kf = new KeyframeContainer(current_image, pnp_descriptor_type, false);
       ROS_INFO("Performing local Edge search...");
@@ -534,9 +619,15 @@ void MeshLocalizer::spin(const ros::TimerEvent& e)
 
         UpdateMotionModel(currentPose, imgTf, cov, dt);
         numPnpRetrys = 0;
-        if(enable_edge_tracking && pnpReprojError < 1.5)
+        if(pnpReprojError < 1.5)
         {
-          localize_state = EDGES;
+          if(tracking_mode == "EDGE")
+            localize_state = EDGES;
+          else if(tracking_mode == "KLT")
+          {
+            klt_init_img = current_image;
+            localize_state = KLT_INIT;
+          }
         }
         currentPose = imgTf;
         UpdateVirtualSensorState(currentPose);
@@ -882,6 +973,7 @@ void MeshLocalizer::ReprojectMask(Mat& dst, const Mat& src, const Eigen::Matrix3
     }
   }
   
+  // Fill in any holes
   medianBlur(dst, dst, 3);
 }  
 

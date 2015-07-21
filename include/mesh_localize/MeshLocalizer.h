@@ -15,6 +15,7 @@
 #include "MapFeatures.h"
 #include "EdgeTrackingUtil.h"
 #include "IMUMotionModel.h"
+#include "KLTTracker.h"
 
 #include "pcl_ros/point_cloud.h"
 #include <pcl/point_cloud.h>
@@ -29,7 +30,9 @@ class MeshLocalizer
     INIT_PNP,
     LOCAL_INIT,
     PNP,
-    EDGES
+    EDGES,
+    KLT_INIT,
+    KLT
   } localize_state;
 
 public:
@@ -103,7 +106,7 @@ private:
   bool show_pnp_matches;
   bool show_global_matches;
   bool show_debug;
-  bool enable_edge_tracking;
+  std::string tracking_mode;
   std::string global_localization_alg;
   double image_scale;
   double canny_high_thresh;
@@ -152,6 +155,9 @@ private:
   Mat undistort_map1, undistort_map2;
 
   IMUMotionModel * imu_mm;
+
+  KLTTracker klt_tracker;
+  Mat klt_init_img;
 };
 
 #endif

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(map_localize)
+project(mesh_localize)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules)
 SET(CMAKE_CXX_FLAGS "-march=native -std=c++11")
 
@@ -106,7 +106,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 catkin_package(
   INCLUDE_DIRS include ${Eigen_INCLUDE_DIRS} ${TinyXML_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS} 
                ${OBJECT_RENDERER_INCLUDE_DIRS} ${GCOP_INCLUDE_DIRS}
-  LIBRARIES map_localize
+  LIBRARIES mesh_localize
   CATKIN_DEPENDS cv_bridge gazebo_msgs image_transport roscpp rospy sensor_msgs std_msgs tf
   DEPENDS TinyXML Eigen OpenCV 
 )
@@ -133,10 +133,10 @@ include_directories(
 ) 
 
 ## Declare a cpp library
-add_library(map_localize
+add_library(mesh_localize
                                   src/KeyframeContainer.cpp
                                   src/CameraContainer.cpp
-                                  src/MapLocalizer.cpp
+                                  src/MeshLocalizer.cpp
                                   src/Common.cpp
                                   src/FindCameraMatrices.cpp
                                   src/Triangulation.cpp
@@ -147,13 +147,14 @@ add_library(map_localize
                                   src/EdgeTrackingUtil.cpp
                                   src/OgreImageGenerator.cpp
                                   src/PointCloudImageGenerator.cpp
+                                  src/KLTTracker.cpp
                                   src/FeatureMatchLocalizer.cpp
                                   src/DepthFeatureMatchLocalizer.cpp
                                   src/FABMAPLocalizer.cpp
                                   src/IMUMotionModel.cpp
                                   src/ASiftDetector.cpp)
 
-target_link_libraries(map_localize
+target_link_libraries(mesh_localize
   ${OpenCV_LIBS} 
   ${TinyXML_LIBRARY}
   ${PCL_LIBRARIES}
@@ -166,23 +167,23 @@ target_link_libraries(map_localize
 
 
 ## Declare a cpp executable
-add_executable(map_localize_node src/map_localize_node.cpp)
+add_executable(mesh_localize_node src/mesh_localize_node.cpp)
 add_executable(render_node src/render_node.cpp)
 
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
-# add_dependencies(map_localize_node map_localize_generate_messages_cpp)
+# add_dependencies(mesh_localize_node mesh_localize_generate_messages_cpp)
 
 ## Specify libraries to link a library or executable target against
 
 
-target_link_libraries(map_localize_node
-   map_localize
+target_link_libraries(mesh_localize_node
+   mesh_localize
    ${catkin_LIBRARIES}
 )
 
 target_link_libraries(render_node
-   map_localize
+   mesh_localize
    ${catkin_LIBRARIES}
 )
 #############
@@ -200,7 +201,7 @@ target_link_libraries(render_node
 # )
 
 ## Mark executables and/or libraries for installation
-# install(TARGETS map_localize map_localize_node
+# install(TARGETS mesh_localize mesh_localize_node
 #   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 #   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 #   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
@@ -225,7 +226,7 @@ target_link_libraries(render_node
 #############
 
 ## Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_map_localize.cpp)
+# catkin_add_gtest(${PROJECT_NAME}-test test/test_mesh_localize.cpp)
 # if(TARGET ${PROJECT_NAME}-test)
 #   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
 # endif()
