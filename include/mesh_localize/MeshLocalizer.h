@@ -54,6 +54,7 @@ private:
   Eigen::Matrix4f ApplyMotionModel(double dt);
   void ResetMotionModel();
 
+  void PublishDepthMat(const Mat& depth, ros::Time stamp);
   void PublishPose(Eigen::Matrix4f tf);
   void PublishMap();
   void PublishPointCloud(const std::vector<pcl::PointXYZ>&);
@@ -67,8 +68,13 @@ private:
   void UpdateVirtualSensorState(Eigen::Matrix4f tf);
 
   std::vector<Point3d> PCLToPoint3d(const std::vector<pcl::PointXYZ>& cpvec);
+  void PublishProcessedImageAndDepth(const cv::Mat& image, const cv::Mat& depth, ros::Time stamp);
   void ReprojectMask(cv::Mat& dst, const cv::Mat& src, const Eigen::Matrix3f& dstK, 
-    const Eigen::Matrix3f& srcK);
+    const Eigen::Matrix3f& srcK, bool median_blur = true);
+  void TransformDepthFrame(const Mat& d1, const Eigen::Matrix4f& tf1, const Eigen::Matrix3f K1, 
+    Mat& d2, const Eigen::Matrix4f& tf2, const Eigen::Matrix3f& K2);
+  void CreateTfViz(Mat& src, Mat& dst, const Eigen::Matrix4f& tf,
+    const Eigen::Matrix3f& K);
 
   std::vector<CameraContainer*> cameras;
   
@@ -77,6 +83,7 @@ private:
   Mat current_virtual_image;
   sensor_msgs::ImageConstPtr current_virtual_depth_msg;
 
+  Mat virtual_depth;
   std::vector<Eigen::Vector3f> positionList;
   Eigen::Matrix4f currentPose;
   bool get_frame;
@@ -86,6 +93,8 @@ private:
   int numLocalizeRetrys;
   double pnpReprojError;
   double pixel_noise;
+  double virtual_fx;
+  double virtual_fy;
 
   MonocularLocalizer* localization_init;
   VirtualImageGenerator* vig;
@@ -125,7 +134,10 @@ private:
   ros::ServiceClient gazebo_client;
   ros::Publisher  estimated_pose_pub;
   ros::Publisher  map_marker_pub;
-  ros::Publisher pointcloud_pub;
+  ros::Publisher  pointcloud_pub;
+  ros::Publisher  image_pub;
+  ros::Publisher  image_cam_info_pub;
+  ros::Publisher  depth_pub;
   tf::TransformBroadcaster br;
 
   ros::Subscriber image_sub;

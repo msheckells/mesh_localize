@@ -5,7 +5,7 @@
 		<remap from="camera_info" to="/camera/camera_info" />
 
 		<param name="do_undistort" type="bool" value="true"/>
-		<param name="tracking_mode" type="string" value="KLT"/>
+		<param name="tracking_mode" type="string" value="PNP"/>
 		<param name="edge_tracking_dmax" type="double" value="15"/>
 		<param name="edge_tracking_iterations" type="int" value="1"/>
 		<param name="autotune_canny" type="bool" value="false"/>
@@ -14,7 +14,7 @@
 		<param name="motion_model" type="string" value="CONSTANT"/>
 		<param name="show_debug" type="bool" value="true"/>
 		<param name="show_pnp_matches" type="bool" value="false"/>
-		<param name="show_global_matches" type="bool" value="false"/>
+		<param name="show_global_matches" type="bool" value="true"/>
 		<param name="virtual_image_source" type="string" value="ogre"/>
 		<param name="pnp_descriptor_type" type="string" value="orb"/>
 		<param name="pnp_match_radius" type="double" value="-1"/>
@@ -23,6 +23,6 @@
 		<param name="ogre_data_dir" type="string" value="$(find mesh_localize)/data/cheezit"/>
 		<param name="ogre_cfg_dir" type="string" value="$(find mesh_localize)/ogre_cfg/"/>
 		<param name="ogre_model" type="string" value="cheezit2.mesh"/>
-		<param name="image_scale" type="double" value=".5"/>
+		<param name="image_scale" type="double" value="0.5"/>
 	</node>
 </launch>

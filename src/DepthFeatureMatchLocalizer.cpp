@@ -141,6 +141,8 @@ std::vector< KeyframeMatch > DepthFeatureMatchLocalizer::FindImageMatches(Keyfra
 
     FlannBasedMatcher matcher;
     std::vector < std::vector< DMatch > > matches;
+    if(keyframes[i]->GetDescriptors().rows == 0 || keyframes[i]->GetDescriptors().cols == 0)
+      continue;
     matcher.knnMatch( img->GetDescriptors(), keyframes[i]->GetDescriptors(), matches, 2 );
 
     std::vector< DMatch > goodMatches;

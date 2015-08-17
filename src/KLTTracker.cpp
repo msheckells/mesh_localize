@@ -7,7 +7,7 @@ using namespace cv;
 KLTTracker::KLTTracker()
 {
   m_nextID = 0;
-  m_maxNumberOfPoints = 100;
+  m_maxNumberOfPoints = 200;
   m_fastDetector = cv::FastFeatureDetector::create(std::string("FAST"));
 }
 
@@ -23,8 +23,15 @@ std::vector<unsigned char> KLTTracker::filterMatchesEpipolarContraint(
 void KLTTracker::init(const cv::Mat& inputFrame, const cv::Mat& depth, const Eigen::Matrix3f& inputK, 
   const Eigen::Matrix3f& depthK, const Eigen::Matrix4f& inputTf, const cv::Mat& mask)
 {
+  m_nextPts.clear();
+  m_prevPts.clear();
+  m_ptIDs.clear();
+  m_tracked3dPts.clear();
+  m_nextKeypoints.clear();
+  m_prevKeypoints.clear();
   m_mask = mask;
   m_nextID = 0;
+
   m_fastDetector->detect(inputFrame, m_nextKeypoints, m_mask);
   std::random_shuffle(m_nextKeypoints.begin(), m_nextKeypoints.end());
   m_nextKeypoints.resize(m_maxNumberOfPoints < m_nextKeypoints.size() ? 

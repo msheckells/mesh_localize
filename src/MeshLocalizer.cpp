@@ -42,6 +42,8 @@
 
 #include <gcop/so3.h>
 
+#include <sensor_msgs/image_encodings.h>
+
 MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     init_undistort(true),
     get_frame(true),
@@ -110,6 +112,10 @@ MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     do_undistort = true;
   if(!nh_private.getParam("pixel_noise", pixel_noise))
     pixel_noise = 3;
+  if(!nh_private.getParam("virtual_fx", virtual_fx))
+    virtual_fx = 400;
+  if(!nh_private.getParam("virtual_fy", virtual_fy))
+    virtual_fy = 400;
   
   if(tracking_mode == "EDGE")
   {
@@ -204,6 +210,9 @@ MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   Kcv = image_scale*Kcv_undistort;
   Kcv.at<double>(2,2) = 1;
  
+  image_pub = nh.advertise<sensor_msgs::Image>("/mesh_localize/image", 1);
+  depth_pub = nh.advertise<sensor_msgs::Image>("/mesh_localize/depth", 1);
+  image_cam_info_pub = nh.advertise<sensor_msgs::CameraInfo>("/mesh_localize/camera_info", 1);
   estimated_pose_pub = nh.advertise<geometry_msgs::PoseStamped>("/mesh_localize/estimated_pose", 1);
   map_marker_pub = nh.advertise<visualization_msgs::Marker>("/mesh_localize/map", 1);
   pointcloud_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZ> >("/mesh_localize/pointcloud", 1);
@@ -227,7 +236,7 @@ MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   else if(virtual_image_source == "ogre")
   {
     ROS_INFO("Using Ogre for virtual image generation");
-    vig = new OgreImageGenerator(ogre_cfg_dir, ogre_model);
+    vig = new OgreImageGenerator(ogre_cfg_dir, ogre_model, virtual_fx, virtual_fy);
   }
   else if(virtual_image_source == "gazebo")
   {
@@ -291,10 +300,10 @@ MeshLocalizer::~MeshLocalizer()
 
 void MeshLocalizer::HandleImage(const sensor_msgs::ImageConstPtr& msg)
 {
-  if(get_frame)
+//  if(get_frame)
   {
     ROS_INFO("Processing new image");
-    img_time_stamp = ros::Time::now(); 
+    img_time_stamp = msg->header.stamp; 
     if((localize_state == PNP || localize_state == INIT_PNP) && virtual_image_source == "gazebo")
     {
       get_virtual_depth = true;
@@ -416,6 +425,33 @@ void MeshLocalizer::PublishPose(Eigen::Matrix4f tf)
                                       tf(2,0), tf(2,1), tf(2,2)));
   //br.sendTransform(tf::StampedTransform(tf_transform, img_time_stamp, "world", "camera"));
   br.sendTransform(tf::StampedTransform(tf_transform.inverse(), img_time_stamp, "camera", "object_pose"));
+}
+
+void MeshLocalizer::CreateTfViz(Mat& src, Mat& dst, const Eigen::Matrix4f& tf,
+  const Eigen::Matrix3f& K)
+{
+  cvtColor(src, dst, CV_GRAY2RGB);
+  Eigen::Vector3f t = tf.block<3,1>(0,3);
+  Eigen::Vector3f xr = tf.block<3,1>(0,0);
+  Eigen::Vector3f yr = tf.block<3,1>(0,1);
+  Eigen::Vector3f zr = tf.block<3,1>(0,2);
+  
+  Eigen::Vector3f x = t + xr/6*xr.norm();
+  Eigen::Vector3f y = t + yr/6*yr.norm();
+  Eigen::Vector3f z = t + zr/6*zr.norm();
+
+  Eigen::Vector3f origin = K*t;
+  Eigen::Vector3f xp = K*x;
+  Eigen::Vector3f yp = K*y;
+  Eigen::Vector3f zp = K*z;
+  Point o2d(origin(0)/origin(2), origin(1)/origin(2));
+  Point x2d(xp(0)/xp(2), xp(1)/xp(2));
+  Point y2d(yp(0)/yp(2), yp(1)/yp(2));
+  Point z2d(zp(0)/zp(2), zp(1)/zp(2));
+
+  line(dst, o2d, x2d, CV_RGB(255, 0, 0), 3, CV_AA);
+  line(dst, o2d, y2d, CV_RGB(0, 255, 0), 3, CV_AA);
+  line(dst, o2d, z2d, CV_RGB(0, 0, 255), 3, CV_AA);
 }
 
 // decaying velocity model
@@ -541,24 +577,44 @@ void MeshLocalizer::spin(const ros::TimerEvent& e)
       std::vector<cv::Point2f> pts2d;
       std::vector<cv::Point3f> pts3d;
       std::vector<int> ptIDs;
+      start = ros::Time::now();
       klt_tracker.processFrame(current_image, output_frame, pts2d, pts3d, ptIDs);
+      ROS_INFO("KLT Process frame time: %f", (ros::Time::now()-start).toSec());  
 
       double pnpReprojError;
       std::vector<int> inlierIdx;
       Eigen::Matrix4f tfran;
       Eigen::Matrix<float, 6, 6> cov;
+      start = ros::Time::now();
       if(!PnPUtil::RansacPnP(pts3d, pts2d, Kcv, currentPose.inverse(), tfran, inlierIdx, &pnpReprojError, &cov))
       {
+        ROS_INFO("KLT failed, reverting back to feature matching");
         ResetMotionModel();
         localize_state = PNP;
       }
       else
       {
-        currentPose = tfran.inverse();
-        UpdateVirtualSensorState(currentPose);
-        PublishPose(currentPose);
-        ROS_INFO("Found image tf");
+        ROS_INFO("KLT PnP time: %f", (ros::Time::now()-start).toSec());  
+        if(pnpReprojError < 2.0 && inlierIdx.size() >= 20)
+        {
+          currentPose = tfran.inverse();
+          UpdateVirtualSensorState(currentPose);
+          PublishPose(currentPose);
+          Mat tf_viz;
+          CreateTfViz(current_image, tf_viz, currentPose.inverse(), K_scaled);
+          namedWindow( "Object Transform", WINDOW_NORMAL );// Create a window for display.
+          imshow( "Object Transform",  tf_viz); 
+          ROS_INFO("Found image tf");
+          localize_state = KLT;
+        }
+        else
+        {
+          ROS_INFO("KLT failed (bad tracking), reverting back to feature matching");
+          ResetMotionModel();
+          localize_state = PNP;
+        }
       }
+      ROS_INFO("KLT PnP: # Inliers = %lu,\t Avg Reproj Error = %f", inlierIdx.size(), pnpReprojError);
 
       if(show_debug)
       {
@@ -590,6 +646,7 @@ void MeshLocalizer::spin(const ros::TimerEvent& e)
         currentPose = imgTf;
         UpdateVirtualSensorState(currentPose);
         PublishPose(currentPose);
+        
         ROS_INFO("Found image tf");
       }
       else
@@ -629,9 +686,31 @@ void MeshLocalizer::spin(const ros::TimerEvent& e)
             localize_state = KLT_INIT;
           }
         }
+        if(image_pub.getNumSubscribers() > 0 || depth_pub.getNumSubscribers() > 0)
+        { 
+          Eigen::Matrix3f vimgK;
+          if(virtual_image_source == "gazebo")
+          {
+            vimgK = virtual_K; 
+          }
+          else if(virtual_image_source == "ogre" || virtual_image_source == "point_cloud")
+          {
+            vimgK = vig->GetK(); 
+          }
+          Mat transformed_depth;
+          TransformDepthFrame(virtual_depth, currentPoseMM, vimgK, transformed_depth, imgTf, 
+            K_scaled);
+          PublishProcessedImageAndDepth(current_image, transformed_depth, img_time_stamp);
+        }
         currentPose = imgTf;
         UpdateVirtualSensorState(currentPose);
         PublishPose(currentPose);
+
+        Mat tf_viz;
+        CreateTfViz(current_image, tf_viz, currentPose.inverse(), K_scaled);
+        namedWindow( "Object Transform", WINDOW_NORMAL );// Create a window for display.
+        imshow( "Object Transform",  tf_viz); 
+        waitKey(1);
         ROS_INFO("Found image tf");
       }
       else
@@ -945,7 +1024,7 @@ std::vector<Point3d> MeshLocalizer::PCLToPoint3d(const std::vector<pcl::PointXYZ
 }
 
 void MeshLocalizer::ReprojectMask(Mat& dst, const Mat& src, const Eigen::Matrix3f& dstK, 
-  const Eigen::Matrix3f& srcK)
+  const Eigen::Matrix3f& srcK, bool median_blur)
 {
   double fxs = srcK(0,0);
   double fys = srcK(1,1);
@@ -974,7 +1053,10 @@ void MeshLocalizer::ReprojectMask(Mat& dst, const Mat& src, const Eigen::Matrix3
   }
   
   // Fill in any holes
-  medianBlur(dst, dst, 3);
+  if(median_blur)
+  {
+    medianBlur(dst, dst, 3);
+  }
 }  
 
 
@@ -1059,8 +1141,6 @@ bool MeshLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matri
   return true;
 }
 
-
-
 bool MeshLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4f vimgTf, Eigen::Matrix4f& tf, std::string vdesc_type, bool mask_kf, Eigen::Matrix<float, 6, 6>& cov)
 {
   tf = Eigen::MatrixXf::Identity(4,4);
@@ -1085,6 +1165,8 @@ bool MeshLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4
     ROS_ERROR("Invalid virtual_image_source");
     return false;
   }
+  virtual_depth = depth;  
+
   vimgK_inv = vimgK.inverse();
   ROS_INFO("VirtualPnP: generate virtual img time: %f", (ros::Time::now()-start).toSec());
   
@@ -1092,7 +1174,7 @@ bool MeshLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4
   {
     Mat reproj_mask = Mat(kfc->GetImage().rows, kfc->GetImage().cols, CV_8U, Scalar(0));
     start = ros::Time::now();
-    ReprojectMask(reproj_mask, mask, K_scaled, vimgK);
+    ReprojectMask(reproj_mask, mask, K_scaled, vimgK, false);
     int dilate_size = 15;
     Mat element = getStructuringElement(MORPH_RECT, Size(2*dilate_size+1,2*dilate_size+1), Point(dilate_size,dilate_size));
     dilate(reproj_mask, reproj_mask, element);
@@ -1358,6 +1440,109 @@ bool MeshLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4
   return true;
 }
 
+
+
+void MeshLocalizer::PublishDepthMat(const Mat& depth, ros::Time stamp)
+{
+  static const float bad_point = std::numeric_limits<float>::quiet_NaN ();
+
+  sensor_msgs::ImagePtr image(new sensor_msgs::Image);
+  image->header.stamp = stamp;
+  image->header.frame_id = "camera";
+
+  image->width = depth.cols;
+  image->height = depth.rows;
+  image->is_bigendian = 0;
+  image->encoding = sensor_msgs::image_encodings::TYPE_32FC1;
+  image->step = sizeof(float)*depth.cols;
+  image->data.resize(depth.cols*depth.rows*sizeof(float));
+
+  const float* in_ptr = reinterpret_cast<const float*>(&depth.data[0]);
+  float* out_ptr = reinterpret_cast<float*>(&image->data[0]);
+  for(int i = 0; i < depth.cols*depth.rows; i++, in_ptr++, out_ptr++)
+  {
+    if(*in_ptr == 0)
+    {
+      *out_ptr = bad_point;
+    } 
+    else
+    {
+      *out_ptr = *in_ptr;
+    }
+  }
+  depth_pub.publish(image);
+}
+
+void MeshLocalizer::PublishProcessedImageAndDepth(const Mat& image, const Mat& depth, ros::Time stamp)
+{
+  cv_bridge::CvImage cv_img;
+  cv_img.image = image;
+  cv_img.encoding = "mono8";
+  cv_img.header.stamp = stamp;
+  cv_img.header.frame_id = "camera";
+
+  image_pub.publish(cv_img.toImageMsg());
+
+  sensor_msgs::CameraInfo cam_info_msg;
+  cam_info_msg.header.stamp = stamp;
+  cam_info_msg.header.frame_id = "camera";
+  cam_info_msg.height = image.rows;
+  cam_info_msg.width = image.cols;
+  cam_info_msg.distortion_model = "blumb_bob";
+	cam_info_msg.D.resize(5,0);
+  cam_info_msg.K[0] = K_scaled(0,0);
+  cam_info_msg.K[1] = 0;
+  cam_info_msg.K[2] = K_scaled(0,2);
+  cam_info_msg.K[3] = 0;
+  cam_info_msg.K[4] = K_scaled(1,1);
+  cam_info_msg.K[5] = K_scaled(1,2);
+  cam_info_msg.K[6] = 0;
+  cam_info_msg.K[7] = 0;
+  cam_info_msg.K[8] = 1;
+
+  image_cam_info_pub.publish(cam_info_msg);  
+
+  PublishDepthMat(depth, stamp);
+}
+
+void MeshLocalizer::TransformDepthFrame(const Mat& d1, const Eigen::Matrix4f& tf1, 
+  const Eigen::Matrix3f K1, Mat& d2, 
+  const Eigen::Matrix4f& tf2, const Eigen::Matrix3f& K2)
+{
+  d2 = Mat(current_image.rows, current_image.cols, CV_32F, Scalar(0));
+  double fx1 = K1(0,0);
+  double fy1 = K1(1,1);
+  double cx1 = K1(0,2);
+  double cy1 = K1(1,2);
+  double fx2 = K2(0,0);
+  double fy2 = K2(1,1);
+  double cx2 = K2(0,2);
+  double cy2 = K2(1,2);
+
+  Eigen::Matrix4f tf2_inv = tf2.inverse();
+
+  for(int i = 0; i < d1.rows; i++)
+  {
+    for(int j = 0; j < d1.cols; j++)
+    {
+      if(d1.at<float>(i,j) == 0 || d1.at<float>(i,j) == -1)
+        continue;
+
+      Eigen::Vector3f pt2d((j-cx1)/fx1, (i-cy1)/fy1, 1);
+      Eigen::Vector3f pt3d = d1.at<float>(i,j)*pt2d;
+      Eigen::Vector3f pt3d_tf2 = (tf2_inv*tf1*Eigen::Vector4f(pt3d(0), pt3d(1), pt3d(2),1)).head<3>();
+      float depth = pt3d_tf2(2);
+      int d2x = round(fx2*pt3d_tf2(0)/depth + cx2);
+      int d2y = round(fy2*pt3d_tf2(1)/depth + cy2);
+
+      if(d2x < 0 || d2x >= d2.cols || d2y < 0 || d2y >= d2.rows)
+        continue;
+
+      d2.at<float>(d2y, d2x) = depth;
+    }
+  }
+  medianBlur(d2, d2, 5);
+}
 
 Eigen::Matrix4f MeshLocalizer::FindImageTfPnp(KeyframeContainer* kfc, const MapFeatures& mf)
 {

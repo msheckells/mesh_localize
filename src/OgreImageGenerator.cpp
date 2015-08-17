@@ -2,14 +2,25 @@
 
 using namespace cv;
 
-OgreImageGenerator::OgreImageGenerator(std::string resource_path, std::string model_name)
+OgreImageGenerator::OgreImageGenerator(std::string resource_path, std::string model_name, double fx, 
+  double fy)
 {
-  app = new CameraRenderApplication(resource_path);
+  app = new CameraRenderApplication(resource_path, fx, fy);
   std::cout << "Using OGRE resource path " << resource_path << std::endl;
   app->go();
   app->loadModel("model", model_name);
 
   vih = new VirtualImageHandler(app);
+}
+
+double OgreImageGenerator::GetHeight()
+{
+  return vih->getImageHeight();
+}
+
+double OgreImageGenerator::GetWidth()
+{
+  return vih->getImageWidth();
 }
 
 Eigen::Matrix3f OgreImageGenerator::GetK()
