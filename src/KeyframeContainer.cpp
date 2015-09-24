@@ -1,8 +1,11 @@
 #include "mesh_localize/KeyframeContainer.h"
 #include "mesh_localize/ASiftDetector.h"
 #include "opencv2/features2d/features2d.hpp"
-#include <opencv2/gpu/gpu.hpp>
-#include <opencv2/nonfree/gpu.hpp>
+
+#ifdef MESH_LOCALIZER_ENABLE_GPU
+  #include <opencv2/gpu/gpu.hpp>
+  #include <opencv2/nonfree/gpu.hpp>
+#endif
 
 KeyframeContainer::KeyframeContainer(Mat img, std::string desc_type, bool extract_now)
  : desc_type(desc_type), has_depth(false), delete_cc(true)
@@ -121,6 +124,7 @@ void KeyframeContainer::ExtractFeatures(std::string desc_type)
     extractor.compute(img, keypoints, descriptors);
     //std::cout << "surf kps: " << keypoints.size() << std::endl; 
   }
+#ifdef MESH_LOCALIZER_ENABLE_GPU
   else if(desc_type == "surf_gpu")
   {
     gpu::SURF_GPU surf_gpu;    
@@ -128,6 +132,7 @@ void KeyframeContainer::ExtractFeatures(std::string desc_type)
     surf_gpu(img_gpu, mask_gpu, kps_gpu, descriptors_gpu);
     surf_gpu.downloadKeypoints(kps_gpu, keypoints);
   }
+#endif
 
 }
 
@@ -145,10 +150,12 @@ Mat KeyframeContainer::GetDepth()
   return depth;
 }
 
+#ifdef MESH_LOCALIZER_ENABLE_GPU
 gpu::GpuMat KeyframeContainer::GetGPUDescriptors()
 {
   return descriptors_gpu;
 }
+#endif
 
 Mat KeyframeContainer::GetDescriptors()
 {

@@ -30,13 +30,13 @@ find_package(OpenMP REQUIRED)
 find_package(ObjectRenderer REQUIRED)
 find_package(OGRE REQUIRED)
 find_package(OIS REQUIRED)
-find_package(GCOP REQUIRED)
+#find_package(GCOP REQUIRED)
 
 message(STATUS "OBJECT_RENDERER_LIBS=${OBJECT_RENDERER_LIBS}")
 message(STATUS "OBJECT_RENDERER_INCLUDE_DIR=${OBJECT_RENDERER_INCLUDE_DIR}")
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -105,7 +105,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include ${Eigen_INCLUDE_DIRS} ${TinyXML_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS} 
-               ${OBJECT_RENDERER_INCLUDE_DIRS} ${GCOP_INCLUDE_DIRS}
+               ${OBJECT_RENDERER_INCLUDE_DIRS} #${GCOP_INCLUDE_DIRS}
   LIBRARIES mesh_localize
   CATKIN_DEPENDS cv_bridge gazebo_msgs image_transport roscpp rospy sensor_msgs std_msgs tf
   DEPENDS TinyXML Eigen OpenCV 
@@ -128,7 +128,7 @@ include_directories(
   ${OBJECT_RENDERER_INCLUDE_DIRS}
   ${OGRE_INCLUDE_DIRS}
   ${OIS_INCLUDE_DIRS}
-  ${GCOP_INCLUDE_DIRS}
+  #${GCOP_INCLUDE_DIRS}
 #  /usr/local/kvld
 ) 
 
@@ -151,7 +151,7 @@ add_library(mesh_localize
                                   src/FeatureMatchLocalizer.cpp
                                   src/DepthFeatureMatchLocalizer.cpp
                                   src/FABMAPLocalizer.cpp
-                                  src/IMUMotionModel.cpp
+                                  #src/IMUMotionModel.cpp
                                   src/ASiftDetector.cpp)
 
 target_link_libraries(mesh_localize
@@ -160,7 +160,7 @@ target_link_libraries(mesh_localize
   ${PCL_LIBRARIES}
   ${OpenCV_LIBRARIES}
   ${OBJECT_RENDERER_LIBS}
-  ${GCOP_LIBRARY}
+  #${GCOP_LIBRARY}
 #  /usr/local/lib/libkvld.a
 #  /usr/local/lib/libOrsa.a
 )

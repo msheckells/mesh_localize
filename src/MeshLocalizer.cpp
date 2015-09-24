@@ -12,8 +12,10 @@
 
 #include <tf/transform_broadcaster.h>
 
-#include <opencv2/gpu/gpu.hpp>
-#include <opencv2/nonfree/gpu.hpp>
+#ifdef MESH_LOCALIZER_ENABLE_GPU
+  #include <opencv2/gpu/gpu.hpp>
+  #include <opencv2/nonfree/gpu.hpp>
+#endif
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include "mesh_localize/OgreImageGenerator.h"
@@ -40,7 +42,7 @@
 #include <pcl/filters/extract_indices.h>
 #include <pcl/io/pcd_io.h>
 
-#include <gcop/so3.h>
+//#include <gcop/so3.h>
 
 #include <sensor_msgs/image_encodings.h>
 
@@ -219,6 +221,8 @@ MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
 
   image_sub = nh.subscribe<sensor_msgs::Image>("image", 1, &MeshLocalizer::HandleImage, this, ros::TransportHints().tcpNoDelay());
 
+  ROS_INFO("Created subs/pubs");
+
   if(virtual_image_source == "point_cloud")
   {
     ROS_INFO("Using PCL point cloud for virtual image generation");
@@ -265,6 +269,7 @@ MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     return;
   }
 
+  /*
   if(motion_model == "IMU")
   {
     imu_mm = new IMUMotionModel();
@@ -278,6 +283,8 @@ MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   {
     imu_mm = NULL;
   }
+  */
+  ROS_INFO("Initialized");
 
   if(show_pnp_matches)
   { 
@@ -294,8 +301,8 @@ MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
 
 MeshLocalizer::~MeshLocalizer()
 {
-  if(imu_mm)
-    delete imu_mm;
+  //if(imu_mm)
+  //  delete imu_mm;
 }
 
 void MeshLocalizer::HandleImage(const sensor_msgs::ImageConstPtr& msg)
@@ -314,6 +321,10 @@ void MeshLocalizer::HandleImage(const sensor_msgs::ImageConstPtr& msg)
     cv_bridge::CvImageConstPtr cvImg = cv_bridge::toCvShare(msg);
     Mat img_undistort;
     Mat image = cvImg->image;
+    if (image.type()!=CV_8UC1)
+    {
+      cvtColor(image, image, CV_RGB2GRAY);
+    }
     //undistort(cvImg->image, current_image, Kcv_undistort, distcoeffcv);
     if(image_scale != 1.0)
     {
@@ -404,11 +415,13 @@ void MeshLocalizer::PublishPose(Eigen::Matrix4f tf)
 
   pose.header.stamp = img_time_stamp;
   
-  pose.pose.position.x = tf(0,3);
-  pose.pose.position.y = tf(1,3);
-  pose.pose.position.z = tf(2,3);
+  Eigen::Matrix4f tf_inv = tf.inverse();
 
-  Eigen::Matrix3f rot = tf.block<3,3>(0,0);
+  pose.pose.position.x = tf_inv(0,3);
+  pose.pose.position.y = tf_inv(1,3);
+  pose.pose.position.z = tf_inv(2,3);
+
+  Eigen::Matrix3f rot = tf_inv.block<3,3>(0,0);
   Eigen::Quaternionf q(rot);
   q.normalize();
   pose.pose.orientation.x = q.x();
@@ -468,7 +481,7 @@ void MeshLocalizer::UpdateMotionModel(const Eigen::Matrix4f& oldTf, const Eigen:
   else if(motion_model == "IMU")
   {
     // Apply correction measurement.  
-    imu_mm->correct(newTf, cov);
+    //imu_mm->correct(newTf, cov);
   }
   else
   {
@@ -481,7 +494,7 @@ Eigen::Matrix4f MeshLocalizer::ApplyMotionModel(double dt)
   if(motion_model == "IMU")
   {
     // Apply all IMU measurements since last ApplyMotionModel call
-    return imu_mm->predict();
+    //return imu_mm->predict();
   }
   else if(motion_model == "CONSTANT")
   {
@@ -501,7 +514,7 @@ void MeshLocalizer::ResetMotionModel()
   }
   else if(motion_model == "IMU")
   {
-    imu_mm->reset();
+    //imu_mm->reset();
   }
 }
 
@@ -604,6 +617,7 @@ void MeshLocalizer::spin(const ros::TimerEvent& e)
           CreateTfViz(current_image, tf_viz, currentPose.inverse(), K_scaled);
           namedWindow( "Object Transform", WINDOW_NORMAL );// Create a window for display.
           imshow( "Object Transform",  tf_viz); 
+          waitKey(1);
           ROS_INFO("Found image tf");
           localize_state = KLT;
         }
@@ -744,7 +758,7 @@ void MeshLocalizer::spin(const ros::TimerEvent& e)
         ResetMotionModel();
         if(motion_model == "IMU")
         { 
-          imu_mm->init(imgTf, cov);
+          //imu_mm->init(imgTf, cov);
         }
 
         numPnpRetrys = 0;
@@ -1216,7 +1230,9 @@ bool MeshLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4
   // Find features in virtual image
   std::vector<KeyPoint> vkps;
   Mat vdesc;
+#ifdef MESH_LOCALIZER_ENABLE_GPU
   gpu::GpuMat vdesc_gpu;
+#endif
   std::vector < std::vector< DMatch > > matches;
   
   // Find image features matches between kfc and vimg
@@ -1256,6 +1272,7 @@ bool MeshLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4
 
     matchRatio = 0.7;
   }
+#ifdef MESH_LOCALIZER_ENABLE_GPU
   else if(vdesc_type == "surf_gpu")
   {
     gpu::SURF_GPU surf_gpu;
@@ -1271,7 +1288,7 @@ bool MeshLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4
  
     matchRatio = 0.8;
   }
-
+#endif
   if(vkps.size() <= 0)
   {
     ROS_WARN("No keypoints found in virtual image");
@@ -1315,12 +1332,15 @@ bool MeshLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4
   else
   {
     // TODO: Add option to match all descriptors on GPU
+#ifdef MESH_LOCALIZER_ENABLE_GPU
     if(vdesc_type == "surf_gpu")
     {
       gpu::BFMatcher_GPU matcher;
       matcher.knnMatch(kfc->GetGPUDescriptors(), vdesc_gpu, matches, 2);  
     }
-    else if(vdesc_type == "orb")
+    else 
+#endif     
+    if(vdesc_type == "orb")
     {
       BFMatcher matcher(NORM_HAMMING);
       matcher.knnMatch( kfc->GetDescriptors(), vdesc, matches, 2 );
@@ -1414,8 +1434,12 @@ bool MeshLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4
   J.setZero();
   J.block<3,3>(0,0) = -Eigen::MatrixXf::Identity(3,3);
   J.block<3,3>(3,3) = -tfran.block<3,3>(0,0).transpose();
-  Eigen::Matrix3d A;
-  gcop::SO3::Instance().hat(A, (-tfran.block<3,3>(0,0).transpose()*tfran.block<3,1>(0,3)).cast<double>()); // hat(-R^Tt)
+  Eigen::Vector3d Avec = (-tfran.block<3,3>(0,0).transpose()*tfran.block<3,1>(0,3)).cast<double>();
+  Eigen::Matrix3d A ;
+  A << 0, -Avec(2), Avec(1),
+       Avec(2), 0, -Avec(0),
+       -Avec(1), Avec(0), 0;
+  //gcop::SO3::Instance().hat(A, (-tfran.block<3,3>(0,0).transpose()*tfran.block<3,1>(0,3)).cast<double>()); // hat(-R^Tt)
   J.block<3,3>(3,0) = A.cast<float>();
 
   cov = J*pixel_noise*cov*J.transpose();

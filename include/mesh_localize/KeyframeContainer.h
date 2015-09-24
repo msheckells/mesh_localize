@@ -9,11 +9,13 @@
 #include <opencv2/legacy/legacy.hpp>
 #include <opencv2/nonfree/features2d.hpp>
 #include <opencv2/highgui/highgui.hpp>
-#include <opencv2/gpu/gpu.hpp>
+
+#ifdef MESH_LOCALIZER_ENABLE_GPU
+  #include <opencv2/gpu/gpu.hpp>
+#endif
+
 #include <Eigen/Core>
 #include <Eigen/Dense>
-
-#define _USE_ASIFT_
 
 using namespace cv;
 
@@ -32,7 +34,9 @@ public:
   Mat GetImage();
   Mat GetDescriptors();
   Mat GetDepth();
+#ifdef MESH_LOCALIZER_ENABLE_GPU
   gpu::GpuMat GetGPUDescriptors();
+#endif
   std::vector<KeyPoint> GetKeypoints();
   Eigen::Matrix4f GetTf();
   Eigen::Matrix3f GetK();
@@ -46,7 +50,9 @@ private:
   CameraContainer* cc;
   std::vector<KeyPoint> keypoints;
   Mat descriptors;
+#ifdef MESH_LOCALIZER_ENABLE_GPU
   gpu::GpuMat descriptors_gpu;
+#endif
   Mat depth; //May not be used
   Mat mask;
   string desc_type;

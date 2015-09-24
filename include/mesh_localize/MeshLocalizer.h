@@ -14,7 +14,7 @@
 #include "KeyframeMatch.h"
 #include "MapFeatures.h"
 #include "EdgeTrackingUtil.h"
-#include "IMUMotionModel.h"
+//#include "IMUMotionModel.h"
 #include "KLTTracker.h"
 
 #include "pcl_ros/point_cloud.h"
@@ -166,7 +166,7 @@ private:
   bool init_undistort;
   Mat undistort_map1, undistort_map2;
 
-  IMUMotionModel * imu_mm;
+  //IMUMotionModel * imu_mm;
 
   KLTTracker klt_tracker;
   Mat klt_init_img;
