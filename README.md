@@ -74,6 +74,7 @@ EDGE mode performs edge-based object tracking and is suitable for objects with l
 
 ##3.2 Subscribed
 /image [sensor_msgs::Image] Unrectified input image on which tracking will be performed
+
 /camera_info [sensor_msgs::CameraInfo] Camera info of input image
 
 #4. Parameters
