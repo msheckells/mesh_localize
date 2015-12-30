@@ -660,6 +660,12 @@ void MeshLocalizer::spin(const ros::TimerEvent& e)
         currentPose = imgTf;
         UpdateVirtualSensorState(currentPose);
         PublishPose(currentPose);
+
+        Mat tf_viz;
+        CreateTfViz(current_image, tf_viz, currentPose.inverse(), K_scaled);
+        namedWindow( "Object Transform", WINDOW_NORMAL );// Create a window for display.
+        imshow( "Object Transform",  tf_viz); 
+        waitKey(1);
         
         ROS_INFO("Found image tf");
       }
