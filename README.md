@@ -1,16 +1,22 @@
-#MeshLocalize: Model-based object tracking in 3D
+#MeshLocalize: Model-based object tracking in 3D for ROS
 
 #1. Installation
 
 ##1.1 Dependencies
+
+This has only been tested with Ubuntu 14.04 + ROS Indigo.
+
 Install Eigen3.
+
 Install OpenCV 2.4.11.  Source can be downloaded from https://github.com/Itseez/opencv/archive/2.4.11.zip
+
 Install OIS (needed for OGRE). Source can be downloaded from http://sourceforge.net/projects/wgois/files/
+
 Install Ogre 1.8.1.  You can download the source from http://sourceforge.net/projects/ogre/files/ogre/1.8/1.8.1/ogre_src_v1-8-1.tar.bz2/download
 
 Install the object_renderer library.  It is a small wrapper around OGRE.  It is used to generate the virtual views of the object that the package uses to initialize the pose.
 
-                 git clone https://git.lcsr.jhu.edu/mshecke1/object_renderer
+                 git clone https://github.com/msheckells/object_renderer
                 
 Build using cmake+make.
 
@@ -23,6 +29,15 @@ From your catkin source directory:
 Call catkin_make as usual
 
 #2. Quick Start
+Download a test rosbag which contains image and camera_info data from http://www.mattsheckells.com/wp-content/uploads/2015/cheezit_test.bag.zip and extract it.
+                 
+Launch the node:
+
+                 roslaunch mesh_localize localize_cheezit_ogre.launch
+
+Play the sequence:
+
+                 rosbag play cheezit_test.bag
 
 #3. Setup Guide
 #3.1 Model Creation
@@ -49,7 +64,10 @@ EDGE mode performs edge-based object tracking and is suitable for objects with l
 #3. Topics
 
 ##3.1 Published
+TODO
 
 ##3.2 Subscribed
+TODO
 
 #4. Parameters
+TODO
