@@ -22,7 +22,9 @@ Install Nvidia Cg Toolkit
                  sudo apt-get install nvidia-cg-toolkit
 
 Install Ogre 1.8.1.  You can download the source from http://sourceforge.net/projects/ogre/files/ogre/1.8/1.8.1/ogre_src_v1-8-1.tar.bz2/download
+
 Install TooN from http://www.edwardrosten.com/cvd/toon.html
+
 Install the object_renderer library.  It is a small wrapper around OGRE.  It is used to generate the virtual views of the object that the package uses to initialize the pose.
 
                  git clone https://github.com/msheckells/object_renderer
