@@ -92,6 +92,12 @@ MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     global_localization_alg = "feature_match";
   if(!nh_private.getParam("image_scale", image_scale))
     image_scale = 1.0;
+  if(!nh_private.getParam("min_pnp_inliers", min_pnp_inliers))
+    min_pnp_inliers = 10;
+  if(!nh_private.getParam("max_pnp_reproj_error", max_pnp_reproj_error))
+    max_pnp_reproj_error = 3;
+  if(!nh_private.getParam("ratio_test_thresh", ratio_test_thresh))
+    ratio_test_thresh = 0.7;
   if(!nh_private.getParam("canny_sigma", canny_sigma))
     canny_sigma = 0.33;
   if(!nh_private.getParam("canny_high_thresh", canny_high_thresh))
@@ -161,6 +167,7 @@ MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     vector<KeyframeContainer*> image_db;
     if(!ImageDbUtil::LoadOgreDataDir(ogre_data_dir, image_db))
     {
+      ROS_ERROR("Could not load OGRE object pose database"); 
       return;
     }
     ROS_INFO("Using Ogre object feature matching for initialization");
@@ -169,7 +176,8 @@ MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
       ROS_ERROR("img_match_descriptor_type must be 'surf' when using OGRE ImageDb");
       return;
     }
-    localization_init = new DepthFeatureMatchLocalizer(image_db, img_match_descriptor_type, show_global_matches);
+    localization_init = new DepthFeatureMatchLocalizer(image_db, img_match_descriptor_type,
+      show_global_matches, min_pnp_inliers, max_pnp_reproj_error);
   }
   else if(global_localization_alg == "fabmap")
   {
@@ -565,7 +573,7 @@ void MeshLocalizer::spin(const ros::TimerEvent& e)
       std::vector<int> inlierIdx;
       Eigen::Matrix4f tfran;
       Eigen::Matrix<float, 6, 6> cov;
-      if(!PnPUtil::RansacPnP(pts3d, pts2d, Kcv, currentPose.inverse(), tfran, inlierIdx, &pnpReprojError, &cov))
+      if(!PnPUtil::RansacPnP(pts3d, pts2d, Kcv, currentPose.inverse(), tfran, inlierIdx, &pnpReprojError, &cov) || inlierIdx.size() < min_pnp_inliers)
       {
         ResetMotionModel();
         localize_state = PNP;
@@ -599,7 +607,7 @@ void MeshLocalizer::spin(const ros::TimerEvent& e)
       Eigen::Matrix4f tfran;
       Eigen::Matrix<float, 6, 6> cov;
       start = ros::Time::now();
-      if(!PnPUtil::RansacPnP(pts3d, pts2d, Kcv, currentPose.inverse(), tfran, inlierIdx, &pnpReprojError, &cov))
+      if(!PnPUtil::RansacPnP(pts3d, pts2d, Kcv, currentPose.inverse(), tfran, inlierIdx, &pnpReprojError, &cov) || inlierIdx.size() < min_pnp_inliers)
       {
         ROS_INFO("KLT failed, reverting back to feature matching");
         ResetMotionModel();
@@ -608,7 +616,7 @@ void MeshLocalizer::spin(const ros::TimerEvent& e)
       else
       {
         ROS_INFO("KLT PnP time: %f", (ros::Time::now()-start).toSec());  
-        if(pnpReprojError < 2.0 && inlierIdx.size() >= 20)
+        if(pnpReprojError < max_pnp_reproj_error && inlierIdx.size() >= min_pnp_inliers)
         {
           currentPose = tfran.inverse();
           UpdateVirtualSensorState(currentPose);
@@ -696,7 +704,7 @@ void MeshLocalizer::spin(const ros::TimerEvent& e)
 
         UpdateMotionModel(currentPose, imgTf, cov, dt);
         numPnpRetrys = 0;
-        if(pnpReprojError < 1.5)
+        if(pnpReprojError < max_pnp_reproj_error)
         {
           if(tracking_mode == "EDGE")
             localize_state = EDGES;
@@ -757,7 +765,7 @@ void MeshLocalizer::spin(const ros::TimerEvent& e)
 
       ros::Time start = ros::Time::now();
       Eigen::Matrix<float, 6 ,6> cov;
-      if(FindImageTfVirtualPnp(kf, currentPose, imgTf, img_match_descriptor_type, false, cov))
+      if(FindImageTfVirtualPnp(kf, currentPose, imgTf, img_match_descriptor_type, true, cov))
       {
         ROS_INFO("FindImageTfVirtualPnp time: %f", (ros::Time::now()-start).toSec());  
        
@@ -969,7 +977,7 @@ std::vector<pcl::PointXYZ> MeshLocalizer::GetPointCloudFromFrames(KeyframeContai
   std::vector<CloudPoint> pcCv;	
   std::vector<pcl::PointXYZ> pc;	
   std::vector<KeyPoint> correspImg1Pt;
-  const double matchRatio = 0.85;
+  const double matchRatio = ratio_test_thresh;
 	
   Eigen::Matrix4f tf1 = kfc1->GetTf().inverse();
   Eigen::Matrix4f tf2 = kfc2->GetTf().inverse();
@@ -1213,6 +1221,11 @@ bool MeshLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4
       namedWindow( "Query Masked", WINDOW_NORMAL );// Create a window for display.
       imshow( "Query Masked", query_masked ); 
     }
+    if(kfc->GetKeypoints().size() == 0)
+    {
+      ROS_WARN("Keyframe has no keypoints");
+      return false;
+    }
   }
   if(show_debug)
   {
@@ -1242,7 +1255,7 @@ bool MeshLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4
   std::vector < std::vector< DMatch > > matches;
   
   // Find image features matches between kfc and vimg
-  double matchRatio;
+  double matchRatio = ratio_test_thresh;
 
   start = ros::Time::now();
   if(vdesc_type == "asift")
@@ -1250,14 +1263,14 @@ bool MeshLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4
     ASiftDetector detector;
     detector.detectAndCompute(vimg, vkps, vdesc, mask, ASiftDetector::SIFT);
 
-    matchRatio = 0.7;
+    //matchRatio = 0.7;
   }
   else if(vdesc_type == "asurf")
   {
     ASiftDetector detector;
     detector.detectAndCompute(vimg, vkps, vdesc, mask, ASiftDetector::SURF);
 
-    matchRatio = 0.7;
+    //matchRatio = 0.7;
   }
   else if(vdesc_type == "orb")
   {
@@ -1266,7 +1279,7 @@ bool MeshLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4
 
     std::cout << "vkps: " << vkps.size() << std::endl;
 
-    matchRatio = 0.8;
+    //matchRatio = 0.8;
   }
   else if(vdesc_type == "surf")
   {
@@ -1276,7 +1289,7 @@ bool MeshLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4
     SurfDescriptorExtractor extractor;
     extractor.compute(vimg, vkps, vdesc);
 
-    matchRatio = 0.7;
+    //matchRatio = 0.7;
   }
 #ifdef MESH_LOCALIZER_ENABLE_GPU
   else if(vdesc_type == "surf_gpu")
@@ -1292,7 +1305,7 @@ bool MeshLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4
 
     std::cout << "vkps: " << vkps.size() << std::endl;
  
-    matchRatio = 0.8;
+    //matchRatio = 0.8;
   }
 #endif
   if(vkps.size() <= 0)
@@ -1430,8 +1443,10 @@ bool MeshLocalizer::FindImageTfVirtualPnp(KeyframeContainer* kfc, Eigen::Matrix4
   //solvePnPRansac(matchPts3d, matchPts, Kcv, 
   std::vector<int> inlierIdx;
   start = ros::Time::now();
-  if(!PnPUtil::RansacPnP(matchPts3d, matchPts, Kcv, vimgTf.inverse(), tfran, inlierIdx, &pnpReprojError, &cov))
+  if(!PnPUtil::RansacPnP(matchPts3d, matchPts, Kcv, vimgTf.inverse(), tfran, inlierIdx, &pnpReprojError, &cov) || inlierIdx.size() < min_pnp_inliers)
   {
+    std::cout << "VirtualPnP: #inliers=" << inlierIdx.size() << " pnp_reproj_error=" 
+      << pnpReprojError << std::endl; 
     return false;
   }
  
@@ -1579,7 +1594,7 @@ Eigen::Matrix4f MeshLocalizer::FindImageTfPnp(KeyframeContainer* kfc, const MapF
   Eigen::Matrix4f tf;
   
   // Find image features matches in map
-  const double matchRatio = 0.6;
+  const double matchRatio = ratio_test_thresh;
 
   FlannBasedMatcher matcher;
   std::vector < std::vector< DMatch > > matches;

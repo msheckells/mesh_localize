@@ -8,8 +8,11 @@
 using namespace cv;
 using namespace std;
 
-DepthFeatureMatchLocalizer::DepthFeatureMatchLocalizer(const std::vector<KeyframeContainer*>& train, std::string desc_type, bool show_matches)
-  : keyframes(train), desc_type(desc_type), show_matches(show_matches)
+DepthFeatureMatchLocalizer::DepthFeatureMatchLocalizer(const std::vector<KeyframeContainer*>& train,
+  std::string desc_type, bool show_matches, int min_inliers, double max_reproj_error,
+  double ratio_test_thresh)
+  : keyframes(train), desc_type(desc_type), show_matches(show_matches), min_inliers(min_inliers),
+    max_reproj_error(max_reproj_error), ratio_test_thresh(ratio_test_thresh)
 {
   namedWindow( "Match", WINDOW_NORMAL );
 }
@@ -34,7 +37,7 @@ bool DepthFeatureMatchLocalizer::localize(const Mat& img, const Mat& Kcv, Eigen:
   double bestReprojError;
   for(int i = 0; i < matches.size(); i++)
   {
-    if(matches[i].matchKps1.size() >= 10)
+    if(matches[i].matchKps1.size() >= 5)
     { 
       std::vector<int> inlierIdx;
       Eigen::Matrix4f vimgTf = matches[i].kfc->GetTf();
@@ -66,10 +69,18 @@ bool DepthFeatureMatchLocalizer::localize(const Mat& img, const Mat& Kcv, Eigen:
       namedWindow( "Global Depth", WINDOW_NORMAL );// Create a window for display.
       imshow( "Global Depth", depth_im ); 
 #endif
+      if(matchPts3d.size() == 0 || matches[i].matchPts1.size() == 0)
+        continue;
 
       Eigen::Matrix4f tf_ransac;
       double reprojError;
       if(!PnPUtil::RansacPnP(matchPts3d, matches[i].matchPts1, Kcv, vimgTf.inverse(), tf_ransac, inlierIdx, &reprojError))
+      {
+        continue;
+      }
+      std::cout << "KF " << i << " reproj error: " << reprojError << " #inliers: " << inlierIdx.size()
+        << std::endl;
+      if(inlierIdx.size() < min_inliers || reprojError >= max_reproj_error)
       {
         continue;
       }
@@ -113,7 +124,7 @@ bool DepthFeatureMatchLocalizer::localize(const Mat& img, const Mat& Kcv, Eigen:
 std::vector< KeyframeMatch > DepthFeatureMatchLocalizer::FindImageMatches(KeyframeContainer* img, int k, Eigen::Matrix4f* pose_guess, unsigned int search_bound)
 {
   const double numMatchThresh = 0;//0.16;
-  const double matchRatio = 0.7;
+  const double matchRatio = ratio_test_thresh;;
   std::vector< KeyframeMatch > kfMatches;
 
   if(pose_guess)

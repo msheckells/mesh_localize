@@ -125,6 +125,9 @@ private:
   double edge_tracking_dmax;
   int edge_tracking_iterations;
   double pnp_match_radius;
+  int min_pnp_inliers;
+  double max_pnp_reproj_error;
+  double ratio_test_thresh;
   std::string motion_model;
   bool do_undistort;
 
