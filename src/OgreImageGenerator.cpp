@@ -3,7 +3,8 @@
 using namespace cv;
 
 OgreImageGenerator::OgreImageGenerator(std::string resource_path, std::string model_name, double fx, 
-  double fy)
+  double fy, bool use_depth_shader)
+ : use_depth_shader(use_depth_shader)
 {
   app = new CameraRenderApplication(resource_path, fx, fy);
   std::cout << "Using OGRE resource path " << resource_path << std::endl;
@@ -44,6 +45,10 @@ Mat OgreImageGenerator::GenerateVirtualImage(const Eigen::Matrix4f& pose, cv::Ma
   Eigen::Quaternionf q(pose.block<3,3>(0,0));
   Mat im;
   vih->getVirtualImageAndDepthInternal(im, depth, x, y, z, q.w(), q.x(), q.y(), q.z());
+  if(!use_depth_shader)
+  {
+    vih->getVirtualDepthNoShader(depth, x, y, z, q.w(), q.x(), q.y(), q.z());
+  }
   // dilate the depth a bit so the outline edges aren't masked out
   int dilate_size = 1;
   Mat element = getStructuringElement(MORPH_RECT, Size(2*dilate_size+1,2*dilate_size+1), Point(dilate_size,dilate_size));

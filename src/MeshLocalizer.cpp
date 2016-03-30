@@ -124,6 +124,8 @@ MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
     virtual_fx = 400;
   if(!nh_private.getParam("virtual_fy", virtual_fy))
     virtual_fy = 400;
+  if(!nh_private.getParam("use_depth_shader", use_depth_shader))
+    use_depth_shader = true;
   
   if(tracking_mode == "EDGE")
   {
@@ -248,7 +250,7 @@ MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   else if(virtual_image_source == "ogre")
   {
     ROS_INFO("Using Ogre for virtual image generation");
-    vig = new OgreImageGenerator(ogre_cfg_dir, ogre_model, virtual_fx, virtual_fy);
+    vig = new OgreImageGenerator(ogre_cfg_dir, ogre_model, virtual_fx, virtual_fy, use_depth_shader);
   }
   else if(virtual_image_source == "gazebo")
   {

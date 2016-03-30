@@ -130,6 +130,7 @@ private:
   double ratio_test_thresh;
   std::string motion_model;
   bool do_undistort;
+  bool use_depth_shader;
 
   ros::NodeHandle nh;
   ros::NodeHandle nh_private;
