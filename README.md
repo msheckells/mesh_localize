@@ -1,8 +1,8 @@
 #MeshLocalize: Model-based object tracking in 3D for ROS
 
-Videos: https://www.youtube.com/watch?v=UqzNlcw1U7s
+Tracking Video: https://www.youtube.com/watch?v=UqzNlcw1U7s
 
-        https://www.youtube.com/watch?v=T953WeLroqg
+Grasping Demo: https://www.youtube.com/watch?v=T953WeLroqg
 
 #1. Installation
 
