@@ -1,12 +1,12 @@
-#MeshLocalize: Model-based object tracking in 3D for ROS
+#MeshLocalize: Model-based object tracking in 3D for ROS #
 
 Tracking Video: https://www.youtube.com/watch?v=UqzNlcw1U7s
 
 Grasping Demo: https://www.youtube.com/watch?v=T953WeLroqg
 
-#1. Installation
+#1. Installation #
 
-##1.1 Dependencies
+##1.1 Dependencies ##
 
 This has only been tested with Ubuntu 14.04 + ROS Indigo.
 
@@ -35,7 +35,7 @@ Install the object_renderer library.  It is a small wrapper around OGRE.  It is 
                 
 Build using cmake+make.
 
-##1.2 Package Install
+##1.2 Package Install ##
 
 From your catkin source directory:
 
@@ -43,7 +43,7 @@ From your catkin source directory:
 
 Call catkin_make as usual
 
-#2. Quick Start
+#2. Quick Start #
 Download a test rosbag which contains image and camera_info data from http://www.mattsheckells.com/wp-content/uploads/2015/cheezit_test.bag.zip and extract it.
                  
 Launch the node:
@@ -54,21 +54,21 @@ Play the sequence:
 
                  rosbag play cheezit_test.bag
 
-#3. Setup Guide
-##3.1 Model Creation
+#3. Setup Guide #
+##3.1 Model Creation ##
 Create a textured 3D model of the object you wish to track, preferably in DAE or OBJ format.  This model can be converted into an OGRE .mesh file using blender and the blender2ogre exporter which can be downloaded from https://blender2ogre.googlecode.com/files/blender2ogre-0.6.0.zip.  The path of the object must be added to ogre_cfg/resources.cfg so that the package can find the model.
 
-##3.2 Descriptor/Pose Database Creation
+##3.2 Descriptor/Pose Database Creation ##
 Make sure the path of the object has been added to cfg/resources.cfg in the object_renderer parent folder.  Use the render_views tool in the object_renderer package to extract descriptors from images of the object rendered from known poses.  This is necessary to initialize the object tracker.  This can be done with the command
 
                   render_views <output_dir> <model_file> <radius> <num_samples>
 
 This will render num_samples views of the object taken at random points lying on a sphere with the specified radius with the camera pointing at the origin.  The output will be saved to the path given as output_dir.  
 
-##3.3 Calibration
+##3.3 Calibration ##
 Calibrate your camera using ROS camera calibration.
 
-##3.4 Tracking Modes
+##3.4 Tracking Modes ##
 There are three tracking modes: PNP, KLT, and EDGE.  All initialize using the descriptor/pose database.  
 
 PNP mode extracts features from an input image and from a virtual image of the object rendered from its last known pose.  The features are matched to give a set of 2D-3D correspondences between the model and the input image.  A PnP problem is solved to give the object pose in the frame of the camera.
@@ -77,8 +77,8 @@ KLT mode first obtains a set of 2D-3D correspondences using PNP mode, then track
 
 EDGE mode performs edge-based object tracking and is suitable for objects with little texture. A Canny edge detecttor is used on both a virtual view of the model and an input image.  Edge points are matched form the model to the input image by performing a 1D search in the gradient direction of the edge.  The distance between matched edges is minimized to estimate the objects pose.
 
-#3. Topics
-##3.1 Published
+#3. Topics #
+##3.1 Published ##
 /mesh_localize/image [sensor_msgs::Image] Rectified version of the input image on which tracking is performed
 
 /mesh_localize/camera_info [sensor_msgs::CameraInfo] Camera info corresonding to resized and cropped input image.
@@ -87,10 +87,10 @@ EDGE mode performs edge-based object tracking and is suitable for objects with l
 
 /mesh_localize/estimated_pose [geometry_msgs::PoseStamped] Pose of the object in the frame of the camera
 
-##3.2 Subscribed
+##3.2 Subscribed ##
 /image [sensor_msgs::Image] Unrectified input image on which tracking will be performed
 
 /camera_info [sensor_msgs::CameraInfo] Camera info of input image
 
-#4. Parameters
+#4. Parameters #
 TODO
