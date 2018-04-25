@@ -15,6 +15,7 @@ public:
     std::vector<cv::Point2f>& pts2d, std::vector<cv::Point3f>& pts3d, std::vector<int>& ptIDs);
   std::vector<unsigned char> filterMatchesEpipolarContraint(const std::vector<cv::Point2f>& pts1, 
     const std::vector<cv::Point2f>& pts2);
+  void filterPointsByIndex(const std::vector<int>& idxs); 
 
 private:
   int m_maxNumberOfPoints;

@@ -620,6 +620,7 @@ void MeshLocalizer::spin(const ros::TimerEvent& e)
         ROS_INFO("KLT PnP time: %f", (ros::Time::now()-start).toSec());  
         if(pnpReprojError < max_pnp_reproj_error && inlierIdx.size() >= min_pnp_inliers)
         {
+          klt_tracker.filterPointsByIndex(inlierIdx);
           currentPose = tfran.inverse();
           UpdateVirtualSensorState(currentPose);
           PublishPose(currentPose);

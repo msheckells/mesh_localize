@@ -117,3 +117,19 @@ bool KLTTracker::processFrame(const cv::Mat& inputFrame, cv::Mat& outputFrame,
   m_nextImg.copyTo(m_prevImg);
   return true;
 }
+
+void KLTTracker::filterPointsByIndex(const std::vector<int>& idxs) 
+{
+  std::vector<cv::Point2f> trackedPts;
+  std::vector<cv::Point3f> tracked3dPts;
+  std::vector<int> trackedPtIDs;
+  for (size_t i = 0; i < idxs.size(); i++)
+  {
+    trackedPts.push_back(m_prevPts.at(idxs.at(i))); 
+    tracked3dPts.push_back(m_tracked3dPts.at(idxs.at(i))); 
+    trackedPtIDs.push_back(m_ptIDs.at(idxs.at(i)));
+  }
+  m_tracked3dPts = tracked3dPts;
+  m_prevPts = trackedPts;
+  m_ptIDs = trackedPtIDs;
+}
