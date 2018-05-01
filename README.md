@@ -95,6 +95,18 @@ EDGE mode performs edge-based object tracking and is suitable for objects with l
 # 5. Parameters #
 TODO
 
-# Using with ROS Kinetic
+# Troubleshooting
+
+## Using with ROS Kinetic
 
 Build vision_opencv from source using the indigo branch.  Make sure it builds using OpenCV 2.4 instead of the OpenCV3 that comes packaged with Kinetic.
+
+## Cuda Linking Error
+
+If you receive the error 
+
+      /usr/bin/ld: cannot find -lopencv_dep_cudart
+
+Then set the following cmake variable
+
+      -DCUDA_USE_STATIC_CUDA_RUNTIME=OFF
