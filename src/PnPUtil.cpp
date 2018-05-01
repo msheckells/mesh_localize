@@ -107,13 +107,13 @@ bool PnPUtil::RansacPnP(const std::vector<Point3f>& matchPts3d, const std::vecto
     }
     
   } 
-  //std::cout << "Num inliers: " << bestInliersIdx.size() << "/" << matchPts.size() << std::endl;
-  //if(bestInliersIdx.size() < 10)
-  //{
-    //std::cout << "RansacPnP: Could not find enough inliers (" << bestInliersIdx.size() << ")"
-    //  << std::endl;
-  //  return false;
-  //}  
+  std::cout << "Num inliers: " << bestInliersIdx.size() << "/" << matchPts.size() << std::endl;
+  if(bestInliersIdx.size() < 3)
+  {
+    std::cout << "RansacPnP: Could not find enough inliers (" << bestInliersIdx.size() << ")"
+      << std::endl;
+    return false;
+  }  
   //ROS_INFO("PnpRansac: Ransac time: %f", (ros::Time::now()-start).toSec());  
 
   std::vector<Point3f> inlierPts3d;
