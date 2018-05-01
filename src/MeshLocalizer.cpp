@@ -205,6 +205,7 @@ MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   std::srand(time(NULL));
 
   ROS_INFO("Waiting for camera_info...");
+  image_sub = nh.subscribe<sensor_msgs::Image>("image", 1, &MeshLocalizer::HandleImage, this, ros::TransportHints().tcpNoDelay());
   sensor_msgs::CameraInfoConstPtr msg = ros::topic::waitForMessage<sensor_msgs::CameraInfo>("camera_info", nh);
   ROS_INFO("camera_info received");
 
@@ -229,7 +230,6 @@ MeshLocalizer::MeshLocalizer(ros::NodeHandle nh, ros::NodeHandle nh_private):
   map_marker_pub = nh.advertise<visualization_msgs::Marker>("/mesh_localize/map", 1);
   pointcloud_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZ> >("/mesh_localize/pointcloud", 1);
 
-  image_sub = nh.subscribe<sensor_msgs::Image>("image", 1, &MeshLocalizer::HandleImage, this, ros::TransportHints().tcpNoDelay());
 
   ROS_INFO("Created subs/pubs");
 
