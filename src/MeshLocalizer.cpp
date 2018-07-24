@@ -1159,14 +1159,17 @@ bool MeshLocalizer::FindImageTfVirtualEdges(KeyframeContainer* kfc, Eigen::Matri
   avgError /= sps.size();
 
   // hacky way to detect failure 
-  if(avgError > 15 || sps.size() < 15)
-    return false;
-  
   ROS_INFO("VirtualEdges: avg matching error: %f", avgError);
+  if(avgError > 15 || sps.size() < 15)
+  {
+    ROS_INFO("VirtualEdges: failed");
+    return false;
+  }
   start = ros::Time::now();
   //EdgeTrackingUtil::getEstimatedPosePnP(tf, vimgTf.inverse(), sps, Kcv);
-  EdgeTrackingUtil::getEstimatedPoseIRLS(tf, vimgTf.inverse(), sps, K_scaled);
-  tf = tf.inverse();
+  Eigen::Matrix4f tf_irls;
+  EdgeTrackingUtil::getEstimatedPoseIRLS(tf_irls, vimgTf.inverse(), sps, K_scaled);
+  tf = tf_irls.inverse();
   ROS_INFO("VirtualEdges: IRLS time: %f", (ros::Time::now()-start).toSec());  
 
   return true;
