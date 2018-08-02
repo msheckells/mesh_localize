@@ -39,7 +39,7 @@ Build using cmake+make.
 
 From your catkin source directory:
 
-                 git clone https://github.com/jhu-asco/map_localize.git
+                 git clone https://github.com/msheckells/mesh_localize.git
 
 Call catkin_make as usual
 
